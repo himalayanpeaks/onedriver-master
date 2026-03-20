@@ -17,7 +17,7 @@ jobs:
     runs-on: windows-latest
 
     env:
-      Solution_Name: OneDriver.Master.Abstract/OneDriver.Master.sln
+      Solution_Name: OneDriver.Master/OneDriver.Master.sln
 
     steps:
       - name: Checkout repository
@@ -48,7 +48,7 @@ jobs:
     runs-on: windows-latest
 
     env:
-      Solution_Name: OneDriver.Master.Abstract/OneDriver.Master.sln
+      Solution_Name: OneDriver.Master/OneDriver.Master.sln
 
     steps:
       - uses: actions/checkout@v4
