@@ -3,11 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using OneDriver.Framework.Module;
+using OneDriver.Module.Function;
+using OneDriver.Module.Device;
 
 namespace OneDriver.Master.Abstract.Contracts
 {
-    public interface IMaster : IDevice
+    public interface IMaster : IFunctions
     {
         public Definition.Error SelectSensorAtPort(int portNumber);
         public int ConnectSensor();
@@ -20,7 +21,7 @@ namespace OneDriver.Master.Abstract.Contracts
         public int WriteParameterToSensor<T>(string name, T value);
         public int WriteCommandToSensor(string name, string value);
         public int WriteCommandToSensor<T>(string name, T value);
-        public string GetErrorMessage(int errorCode);
+        public new string GetErrorMessage(int errorCode);
         public string?[] GetAllParamsFromSensor();
     }
 }

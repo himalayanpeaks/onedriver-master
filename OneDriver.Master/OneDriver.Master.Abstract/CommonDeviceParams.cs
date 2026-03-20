@@ -1,8 +1,8 @@
-﻿using OneDriver.Framework.Module.Parameter;
+﻿using OneDriver.Module.Parameter;
 
 namespace OneDriver.Master.Abstract
 {
-    public class CommonDeviceParams : BaseDeviceParam
+    public class CommonDeviceParams : BaseDeviceParams
     {
         private int protocolId;
         private Contracts.Definition.Mode _mode;

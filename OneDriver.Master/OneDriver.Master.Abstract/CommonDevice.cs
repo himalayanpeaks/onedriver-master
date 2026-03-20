@@ -1,23 +1,27 @@
 ﻿using OneDriver.Framework.Base;
 using OneDriver.Framework.Libs.Validator;
-using OneDriver.Framework.Module;
-using OneDriver.Framework.Module.Parameter;
+using OneDriver.Module;
+using OneDriver.Module.Parameter;
 using Serilog;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Reflection;
 using OneDriver.Master.Abstract.Contracts;
 using DeviceDescriptor.Abstract.Variables;
 using DeviceDescriptor.Abstract.Helper;
+using OneDriver.Module.Device;
+using OneDriver.Module.Channel;
+using OneDriver.Master.Abstract.Channels;
 
 namespace OneDriver.Master.Abstract
 {
     public abstract class CommonDevice<TDeviceParams, TSensorVariable> :
-        BaseDeviceWithChannels<TDeviceParams, DeviceVariables<TSensorVariable>>, IMaster
+        BaseDeviceWithChannels<TDeviceParams, CommonVariables<TSensorVariable>>, IMaster
         where TDeviceParams : CommonDeviceParams
-        where TSensorVariable : BasicVariable, new()
+        where TSensorVariable : BasicVariable
     {
         protected CommonDevice(TDeviceParams parameters, IValidator validator,
-           ObservableCollection<BaseChannel<DeviceVariables<TSensorVariable>>> elements)
+           ObservableCollection<BaseChannel<CommonVariables<TSensorVariable>>> elements)
            : base(parameters, validator, elements)
         {
             Parameters.PropertyChanged += Parameters_PropertyChanged;
@@ -30,14 +34,8 @@ namespace OneDriver.Master.Abstract
 
             var allNames = new List<string>();
 
-            if (channelParams.SpecificVariableCollection != null)
-                allNames.AddRange(channelParams.SpecificVariableCollection.Select(x => x.Name));
-
-            if (channelParams.StandardVariableCollection != null)
-                allNames.AddRange(channelParams.StandardVariableCollection.Select(x => x.Name));
-
-            if (channelParams.SystemVariableCollection != null)
-                allNames.AddRange(channelParams.SystemVariableCollection.Select(x => x.Name));
+            if (channelParams.ParamsCollection != null)
+                allNames.AddRange(channelParams.ParamsCollection.Where(x => !string.IsNullOrEmpty(x.Name)).Select(x => x.Name!));
 
             return allNames.ToArray();
         }
@@ -89,11 +87,11 @@ namespace OneDriver.Master.Abstract
                 return Contracts.Definition.Error.UptNotConnected;
             }
 
-            foreach (var param in Elements[Parameters.SelectedChannel].Parameters.StandardVariableCollection)
+            foreach (var param in Elements[Parameters.SelectedChannel].Parameters.StandardVariables)
                 ReadParameterFromSensor(param);
-            foreach (var param in Elements[Parameters.SelectedChannel].Parameters.SpecificVariableCollection)
+            foreach (var param in Elements[Parameters.SelectedChannel].Parameters.SpecificVariables)
                 ReadParameterFromSensor(param);
-            foreach (var param in Elements[Parameters.SelectedChannel].Parameters.SystemVariableCollection)
+            foreach (var param in Elements[Parameters.SelectedChannel].Parameters.SystemVariables)
                 ReadParameterFromSensor(param);
 
             return Contracts.Definition.Error.NoError;
@@ -133,28 +131,28 @@ namespace OneDriver.Master.Abstract
             value = default(T);
             int err = ReadParameterFromSensor(name, out var readValue);
 
-            if (err == 0 && DataConverter.ConvertTo(readValue, out value))
+            if (err == 0 && !string.IsNullOrEmpty(readValue) && DataConverter.ConvertTo(readValue, out value))
                 return 0;
             return err != 0 ? err : (int)DataConverter.DataError.UnsupportedDataType;
         }
         private TSensorVariable? FindCommand(string name) => 
-            Elements[Parameters.SelectedChannel].Parameters.CommandCollection.FirstOrDefault(x => x.Name == name);
+            Elements[Parameters.SelectedChannel].Parameters.CommandsCollection.FirstOrDefault(x => x.Name == name);
 
 
         private TSensorVariable? FindParam(string name)
         {
             TSensorVariable? parameter = default;
 
-            if (Elements[Parameters.SelectedChannel].Parameters.SpecificVariableCollection != null)
-                parameter = Elements[Parameters.SelectedChannel].Parameters.SpecificVariableCollection
+            if (Elements[Parameters.SelectedChannel].Parameters.SpecificVariables != null)
+                parameter = Elements[Parameters.SelectedChannel].Parameters.SpecificVariables
                     .FirstOrDefault(x => x.Name == name);
 
-            if (parameter == null && Elements[Parameters.SelectedChannel].Parameters.SystemVariableCollection != null)
-                parameter = Elements[Parameters.SelectedChannel].Parameters.SystemVariableCollection
+            if (parameter == null && Elements[Parameters.SelectedChannel].Parameters.SystemVariables != null)
+                parameter = Elements[Parameters.SelectedChannel].Parameters.SystemVariables
                     .FirstOrDefault(x => x.Name == name);
 
-            if (parameter == null && Elements[Parameters.SelectedChannel].Parameters.StandardVariableCollection != null)
-                parameter = Elements[Parameters.SelectedChannel].Parameters.StandardVariableCollection
+            if (parameter == null && Elements[Parameters.SelectedChannel].Parameters.StandardVariables != null)
+                parameter = Elements[Parameters.SelectedChannel].Parameters.StandardVariables
                     .FirstOrDefault(x => x.Name == name);
 
             return parameter;
@@ -189,7 +187,12 @@ namespace OneDriver.Master.Abstract
                 return (int)DataConverter.DataError.InValidData;
             }
 
-            foundCommand.Value = toWriteValue;
+            if (!TrySetVariableValue(foundCommand, toWriteValue))
+            {
+                Log.Error("Unable to set command value: " + name);
+                return (int)DataConverter.DataError.UnsupportedDataType;
+            }
+
             return WriteCommandToSensor(foundCommand);
         }
         internal int WriteCommandToSensor(TSensorVariable command)
@@ -214,7 +217,7 @@ namespace OneDriver.Master.Abstract
             else
                 return (int)DataConverter.DataError.InValidData;
         }
-        public string GetErrorMessage(int errorCode)
+        protected override string GetErrorMessageFromDerived(int errorCode)
         {
             if (Enum.IsDefined(typeof(Contracts.Definition.Error), errorCode))
                 return ((Contracts.Definition.Error)errorCode).ToString();
@@ -236,6 +239,19 @@ namespace OneDriver.Master.Abstract
                 Log.Error(e.ToString());
             }
             return err;
+        }
+
+        protected static bool TrySetVariableValue(BasicVariable variable, string? value)
+        {
+            var setter = typeof(BasicVariable)
+                .GetProperty(nameof(BasicVariable.Value), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                ?.SetMethod;
+
+            if (setter == null)
+                return false;
+
+            setter.Invoke(variable, [value]);
+            return true;
         }
 
         
