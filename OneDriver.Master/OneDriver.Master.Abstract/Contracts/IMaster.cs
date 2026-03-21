@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using OneDriver.Module.Function;
-using OneDriver.Module.Device;
+﻿using OneDriver.Module.Function;
 
 namespace OneDriver.Master.Abstract.Contracts
 {

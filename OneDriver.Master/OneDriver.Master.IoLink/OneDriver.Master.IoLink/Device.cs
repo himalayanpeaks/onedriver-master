@@ -1,45 +1,29 @@
-﻿using DeviceDescriptor.Abstract;
-using DeviceDescriptor.Abstract.Helper;
+﻿using DeviceDescriptor.Abstract.Helper;
 using DeviceDescriptor.Abstract.Variables;
-using DeviceDescriptor.Factory;
 using DeviceDescriptor.IoLink;
-using DeviceDescriptor.IoLink.Source;
 using DeviceDescriptor.IoLink.Variables;
 using OneDriver.Framework.Base;
 using OneDriver.Framework.Libs.Validator;
 using OneDriver.Master.Abstract;
-using OneDriver.Master.Abstract.Channels;
+using OneDriver.Master.IoLink.Channels;
 using OneDriver.Master.IoLink.Products;
 using OneDriver.Module.Channel;
-using OneDriver.Module.Parameter;
 using Serilog;
-using System.Buffers.Text;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Net;
 using static DeviceDescriptor.Abstract.Definition;
 
 namespace OneDriver.Master.IoLink
 {
-    public class Device : CommonDevice<DeviceParams, Variable>
+    public class Device : CommonDevice<DeviceParams, ChannelParams, Variable>
     {
         private IMasterHAL DeviceHAL { get; set; }
-        Descriptor? DeviceDescriptor { get; set; }
-        public Device(string name, IValidator validator, IMasterHAL deviceHAL) :
+
+        public Device(string name, IValidator validator, IMasterHAL deviceHAL, Descriptor descriptor) :
             base(new DeviceParams(name), validator,
-                new ObservableCollection<BaseChannel<CommonVariables<Variable>>>()) 
+                new ObservableCollection<BaseChannel<ChannelParams>>(), descriptor)
         {
             DeviceHAL = deviceHAL;
-            var request = new DescriptorRequest
-            {
-                Address = "c:\\temp\\F77.xml",
-                DeviceId = "1116161",
-                ProductName = "OQT150-R100-2EP-IO",
-                IoLinkRevision = "1.1",
-                ArticleNumber = "267075-100149",
-            };
-            DeviceDescriptor = DeviceDescriptorFactory.CreateIoLinkDescriptor(DescriptorType.LocalStorage, request);
-
             Init();
         }
 
@@ -52,8 +36,7 @@ namespace OneDriver.Master.IoLink
 
             for (var i = 0; i < DeviceHAL.NumberOfChannels; i++)
             {
-                var channelParameters = new CommonVariables<BasicVariable>();
-                var channel = new CommonChannel<Variable>(new CommonVariables<Variable>());
+                var channel = new Channels.Channel(new ChannelParams(""));
                 Elements.Add(channel);
                 Elements[i].Parameters.PropertyChanged += Parameters_PropertyChanged;
                 Elements[i].Parameters.PropertyChanging += Parameters_PropertyChanging;
@@ -65,7 +48,7 @@ namespace OneDriver.Master.IoLink
         private void Parameters_PropertyReadRequested(object sender, PropertyReadRequestedEventArgs e)
         {
             switch (e.PropertyName)
-            {                
+            {
             }
         }
 
@@ -74,7 +57,7 @@ namespace OneDriver.Master.IoLink
             if (e.Data == null)
                 return;
 
-            var local = Elements[e.ChannelNumber].Parameters.PdInCollection.ToList().FindAll(x => x.Index == e.Index);
+            var local = _descriptor.Variables.PdInCollection.ToList().FindAll(x => x.Index == e.Index);
             foreach (var parameter in local)
             {
                 var processValue = DataConverter.MaskByteArray(e.Data, parameter.Offset, parameter.LengthInBits,
@@ -107,7 +90,7 @@ namespace OneDriver.Master.IoLink
             }
         }
         public Products.Definition.t_eInternal_Return_Codes AddProcessDataIndex(int processDataIndex) => DeviceHAL.SetProcessData((ushort)processDataIndex, out var length);
-        
+
 
         private void Parameters_PropertyChanging(object sender, PropertyValidationEventArgs e)
         {
@@ -154,11 +137,11 @@ namespace OneDriver.Master.IoLink
             var err = DeviceHAL.WriteRecord((ushort)index, (byte)subindex, data, out _, out _);
             return (int)err;
         }
-        protected override int ReadParam(Variable param)
+        protected override int ReadParam(BasicVariable param)
         {
             TrySetVariableValue(param, null);
             var err = DeviceHAL.ReadRecord(Convert.ToUInt16(param.Index),
-                Convert.ToByte(param.Subindex), out var data, out _, out _, out _);
+                Convert.ToByte(((Variable)param).Subindex), out var data, out _, out _, out _);
 
             if (Equals(data, null))
                 throw new Exception("index: " + param.Index + " read value is null");
@@ -187,19 +170,7 @@ namespace OneDriver.Master.IoLink
             return (int)err;
         }
 
-        public void LoadIodd(DescriptorRequest request, string baseUrl, string apiKey)
-        {
-            DeviceDescriptorFactory.ConfigureIoddFinder(baseUrl, apiKey);
-            DeviceDescriptor = DeviceDescriptorFactory.CreateIoLinkDescriptor(DescriptorType.LocalStorage, request);
-
-            if (DeviceDescriptor == null)
-                throw new Exception("Failed to load IODD file: " );
-            else
-                this.Elements[this.Parameters.SelectedChannel].Parameters.ParamsCollection[0] 
-                    = (Variable)DeviceDescriptor.Variables.ParamsCollection[0];
-
-        }
-        protected override int WriteParam(Variable param)
+        protected override int WriteParam(BasicVariable param)
         {
             if (string.IsNullOrEmpty(param.Value))
                 Log.Error(param.Name + " Data null");
@@ -209,12 +180,12 @@ namespace OneDriver.Master.IoLink
             if ((dataError = DataConverter.ToByteArray(dataToWrite, param.DataType, param.LengthInBits,
                     true, out var returnedData, param.ArrayCount)) != DataConverter.DataError.NoError)
                 return (int)dataError;
-            return (int)DeviceHAL.WriteRecord((ushort)param.Index, (byte)param.Subindex, returnedData,
+            return (int)DeviceHAL.WriteRecord((ushort)param.Index, (byte)((Variable)param).Subindex, returnedData,
                 out _, out _);
         }
 
-        protected override int WriteCommand(Variable command) => WriteParam(command);
+        protected override int WriteCommand(BasicVariable command) => WriteParam(command);
 
-        
+
     }
 }
