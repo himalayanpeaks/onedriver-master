@@ -161,11 +161,15 @@ namespace OneDriver.Master.IoLink
 
                 TrySetVariableValue(param, string.Join(";", valueData));
             }
-
-            if (param.DataType == DataType.CHAR)
+            else if (param.DataType == DataType.CHAR)
             {
                 DataConverter.ToString(data, out var val);
                 TrySetVariableValue(param, val);
+            }
+            else
+            {
+                // For RecordT and other unsupported types, return raw bytes as comma-separated values
+                TrySetVariableValue(param, string.Join(",", data.Select(x => x.ToString()).ToArray()));
             }
             return (int)err;
         }

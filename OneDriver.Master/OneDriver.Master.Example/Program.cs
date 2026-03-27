@@ -93,8 +93,9 @@ namespace OneDriver.Master.Example
                     Log.Information($"Channel Variable: {variable.Name}, Index={variable.Index}, Subindex={variable.Subindex}");
                 }
             }
-
-            var readResult = master.ReadParameterFromSensor("VendorName", out string? vendorName);
+            string vendorName = "";
+            var readResult = master.ReadParameterFromSensor("TN_ISDU_BDCH1_SETPOINTS.TN_SUBIDX_BDCH_SETPOINT1", out string? sub);
+            readResult = master.ReadParameterFromSensor("TN_ISDU_BDCH1_SETPOINTS", out string? main);
             if (readResult == 0 && vendorName != null)
             {
                 Log.Information($"Vendor Name: {vendorName}");

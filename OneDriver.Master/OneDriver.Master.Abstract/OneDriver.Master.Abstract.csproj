@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="DeviceDescriptor.Abstract" Version="3.0.0" />
+    <PackageReference Include="DeviceDescriptor.Abstract" Version="3.2.0" />
     <PackageReference Include="OneDriver.Module" Version="1.0.0" />
   </ItemGroup>
 

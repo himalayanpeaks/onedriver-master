@@ -30,7 +30,8 @@ namespace OneDriver.Master.IoLink.Products
         {
             string comport = validator.ValidationRegex.Match(initString).Groups[1].Value;
             _handle = IOL_Create(comport);
-            Log.Error("TMG master - PC connection: " + (t_eInternal_Return_Codes)_handle + ", error code " + _handle);
+            if (_handle == 0)
+                Log.Error("TMG master - PC connection: " + (t_eInternal_Return_Codes)_handle + ", error code " + _handle);
             if (_handle <= 0)
                 return OneDriver.Module.Definition.ConnectionError.CommunicationError;
             return OneDriver.Module.Definition.ConnectionError.NoError;
@@ -44,7 +45,6 @@ namespace OneDriver.Master.IoLink.Products
                 status = IOL_Destroy(_handle);
                 _handle = 0;
             }
-            Log.Error("TMG master - PC disconnect " + (t_eInternal_Return_Codes)status + ", error code " + status);
             if (status == 0)
                 return OneDriver.Module.Definition.ConnectionError.NoError;
             return OneDriver.Module.Definition.ConnectionError.ErrorInDisconnecting;
