@@ -1,0 +1,241 @@
+syntax = "proto3";
+
+option csharp_namespace = "OneDriver.Master.IoLink.gRPC";
+
+package iolink_master;
+
+// IoLink Master Service - Provides device management and data access
+service IoLinkMasterService {
+  // Device connection management
+  rpc Connect(ConnectRequest) returns (ConnectResponse);
+  rpc Disconnect(DisconnectRequest) returns (DisconnectResponse);
+  
+  // Sensor management
+  rpc SelectSensorAtPort(SelectSensorRequest) returns (SelectSensorResponse);
+  rpc ConnectSensor(ConnectSensorRequest) returns (ConnectSensorResponse);
+  rpc DisconnectSensor(DisconnectSensorRequest) returns (DisconnectSensorResponse);
+  
+  // Parameter operations
+  rpc ReadParameter(ReadParameterRequest) returns (ReadParameterResponse);
+  rpc WriteParameter(WriteParameterRequest) returns (WriteParameterResponse);
+  rpc WriteCommand(WriteCommandRequest) returns (WriteCommandResponse);
+  rpc UpdateDataFromSensor(UpdateDataRequest) returns (UpdateDataResponse);
+  rpc GetAllParameters(GetAllParametersRequest) returns (GetAllParametersResponse);
+  
+  // IoLink-specific operations
+  rpc ReadParamByIndex(ReadParamByIndexRequest) returns (ReadParamByIndexResponse);
+  rpc WriteParamByIndex(WriteParamByIndexRequest) returns (WriteParamByIndexResponse);
+  rpc AddProcessDataIndex(AddProcessDataIndexRequest) returns (AddProcessDataIndexResponse);
+  
+  // Real-time process data streaming
+  rpc StreamProcessData(StreamProcessDataRequest) returns (stream ProcessDataUpdate);
+  
+  // Descriptor and metadata
+  rpc GetDescriptor(GetDescriptorRequest) returns (GetDescriptorResponse);
+  rpc GetChannelInfo(GetChannelInfoRequest) returns (GetChannelInfoResponse);
+}
+
+// Connection messages
+message ConnectRequest {
+  string master_id = 1;
+  string init_string = 2;  // e.g., "COM3" fot tmg master
+}
+
+message ConnectResponse {
+  int32 error_code = 1;
+  string error_message = 2;
+  bool is_connected = 3;
+}
+
+message DisconnectRequest {
+  string master_id = 1;
+}
+
+message DisconnectResponse {
+  int32 error_code = 1;
+  string error_message = 2;
+}
+
+// Sensor selection messages
+message SelectSensorRequest {
+  string master_id = 1;
+  int32 port_number = 2;
+}
+
+message SelectSensorResponse {
+  int32 error_code = 1;
+  string error_message = 2;
+}
+
+message ConnectSensorRequest {
+  string master_id = 1;
+  int32 port_number = 2;  // Optional, uses selected port if not specified
+}
+
+message ConnectSensorResponse {
+  int32 error_code = 1;
+  string error_message = 2;
+  bool is_sensor_connected = 3;
+}
+
+message DisconnectSensorRequest {
+  string master_id = 1;
+}
+
+message DisconnectSensorResponse {
+  int32 error_code = 1;
+  string error_message = 2;
+}
+
+// Parameter operation messages
+message ReadParameterRequest {
+  string master_id = 1;
+  string parameter_name = 2;
+  int32 port_number = 3;  // Optional, uses selected port
+}
+
+message ReadParameterResponse {
+  int32 error_code = 1;
+  string error_message = 2;
+  VariableData variable = 3;
+}
+
+message WriteParameterRequest {
+  string master_id = 1;
+  string parameter_name = 2;
+  string value = 3;
+  int32 port_number = 4;  // Optional
+}
+
+message WriteParameterResponse {
+  int32 error_code = 1;
+  string error_message = 2;
+}
+
+message WriteCommandRequest {
+  string master_id = 1;
+  string command_name = 2;
+  string value = 3;
+  int32 port_number = 4;  // Optional
+}
+
+message WriteCommandResponse {
+  int32 error_code = 1;
+  string error_message = 2;
+}
+
+message UpdateDataRequest {
+  string master_id = 1;
+  int32 port_number = 2;  // Optional, -1 for all sensors
+}
+
+message UpdateDataResponse {
+  int32 error_code = 1;
+  string error_message = 2;
+  repeated VariableData updated_variables = 3;
+}
+
+message GetAllParametersRequest {
+  string master_id = 1;
+  int32 port_number = 2;
+}
+
+message GetAllParametersResponse {
+  repeated string parameter_names = 1;
+}
+
+// IoLink-specific index-based operations
+message ReadParamByIndexRequest {
+  string master_id = 1;
+  int32 index = 2;
+  int32 subindex = 3;
+}
+
+message ReadParamByIndexResponse {
+  int32 error_code = 1;
+  string error_message = 2;
+  bytes data = 3;
+}
+
+message WriteParamByIndexRequest {
+  string master_id = 1;
+  int32 index = 2;
+  int32 subindex = 3;
+  bytes data = 4;
+}
+
+message WriteParamByIndexResponse {
+  int32 error_code = 1;
+  string error_message = 2;
+}
+
+message AddProcessDataIndexRequest {
+  string master_id = 1;
+  int32 process_data_index = 2;
+}
+
+message AddProcessDataIndexResponse {
+  int32 error_code = 1;
+  string error_message = 2;
+  int32 length_in_bytes = 3;
+}
+
+// Process data streaming
+message StreamProcessDataRequest {
+  string master_id = 1;
+  int32 port_number = 2;
+}
+
+message ProcessDataUpdate {
+  int32 channel_number = 1;
+  int32 index = 2;
+  int32 subindex = 3;
+  bytes data = 4;
+  int64 timestamp = 5;
+}
+
+// Descriptor and metadata messages
+message GetDescriptorRequest {
+  string master_id = 1;
+}
+
+message GetDescriptorResponse {
+  int32 parameter_count = 1;
+  int32 command_count = 2;
+  int32 process_data_count = 3;
+  repeated VariableData parameters = 4;
+  repeated VariableData commands = 5;
+}
+
+message GetChannelInfoRequest {
+  string master_id = 1;
+  int32 channel_number = 2;
+}
+
+message GetChannelInfoResponse {
+  string channel_name = 1;
+  bool is_active = 2;
+  int32 m_channel_prop = 3;  // IoLink-specific channel property
+  repeated VariableData variables = 4;
+}
+
+// Common data structures
+message VariableData {
+  string name = 1;
+  int32 index = 2;
+  int32 subindex = 3;
+  string value = 4;
+  string data_type = 5;  // UINT, INT, CHAR, BOOL, etc.
+  int32 length_in_bits = 6;
+  int32 offset = 7;
+  bool is_dynamic = 8;
+  int32 array_count = 9;
+}
+
+message DeviceInfo {
+  string name = 1;
+  bool is_connected = 2;
+  int32 selected_channel = 3;
+  string mode = 4;  // Communication, ProcessData, StandardInputOutput
+  int32 number_of_channels = 5;
+}
