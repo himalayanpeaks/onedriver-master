@@ -111,6 +111,9 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                 _logger.LogInformation("Successfully connected to sensor at port 0");
                 _logger.LogInformation("Master {MasterId} is ready. Data will be sent to Azure IoT Hub on parameter reads.", masterId);
 
+                _logger.LogInformation("Setting master service reference for Direct Methods...");
+                _iotHubService.SetMasterService(_masterService);
+
                 _logger.LogInformation("Starting Cloud-to-Device command listener...");
                 await _iotHubService.StartReceivingCommandsAsync();
                 _logger.LogInformation("Cloud command handler is ready (injected: {HandlerReady})", _commandHandler != null);

@@ -9,6 +9,7 @@ namespace OneDriver.Master.IoLink.gRPC.Services
         private readonly ILogger<AzureIoTHubService> _logger;
         private readonly string? _connectionString;
         private DeviceClient? _deviceClient;
+        private IoLinkMasterServiceImpl? _masterService;
 
         public event Func<CloudCommand, Task>? OnCommandReceived;
 
@@ -35,6 +36,12 @@ namespace OneDriver.Master.IoLink.gRPC.Services
             }
         }
 
+        public void SetMasterService(IoLinkMasterServiceImpl masterService)
+        {
+            _masterService = masterService;
+            _logger.LogInformation("Master service reference set for Direct Methods");
+        }
+
         public async Task StartReceivingCommandsAsync()
         {
             if (_deviceClient == null || string.IsNullOrEmpty(_connectionString))
@@ -45,8 +52,17 @@ namespace OneDriver.Master.IoLink.gRPC.Services
 
             try
             {
+                // Set up C2D message handler
                 await _deviceClient.SetReceiveMessageHandlerAsync(ReceiveC2dMessageAsync, null);
-                _logger.LogInformation("Started listening for Cloud-to-Device commands from Azure");
+                _logger.LogInformation("Started listening for Cloud-to-Device messages from Azure");
+
+                // Set up Direct Method handlers
+                await _deviceClient.SetMethodHandlerAsync("ReadParameter", HandleReadParameterMethod, null);
+                await _deviceClient.SetMethodHandlerAsync("WriteParameter", HandleWriteParameterMethod, null);
+                await _deviceClient.SetMethodHandlerAsync("GetAllParameters", HandleGetAllParametersMethod, null);
+                await _deviceClient.SetMethodDefaultHandlerAsync(HandleDefaultMethod, null);
+
+                _logger.LogInformation("Started listening for Direct Methods from Azure");
             }
             catch (Exception ex)
             {
@@ -220,6 +236,260 @@ namespace OneDriver.Master.IoLink.gRPC.Services
             {
                 disposable.Dispose();
             }
+        }
+
+        // Direct Method Handlers
+        private async Task<MethodResponse> HandleReadParameterMethod(MethodRequest methodRequest, object userContext)
+        {
+            _logger.LogInformation("Direct Method 'ReadParameter' invoked");
+
+            try
+            {
+                var payload = Encoding.UTF8.GetString(methodRequest.Data);
+                var command = JsonSerializer.Deserialize<CloudCommand>(payload, new JsonSerializerOptions 
+                { 
+                    PropertyNameCaseInsensitive = true 
+                });
+
+                if (command == null || string.IsNullOrEmpty(command.ParameterName))
+                {
+                    return new MethodResponse(Encoding.UTF8.GetBytes("{\"status\":\"error\",\"message\":\"Invalid request - ParameterName required\"}"), 400);
+                }
+
+                if (_masterService == null)
+                {
+                    return new MethodResponse(Encoding.UTF8.GetBytes("{\"status\":\"error\",\"message\":\"Master service not initialized\"}"), 500);
+                }
+
+                // Call the gRPC service method directly to get the value
+                var request = new ReadParameterRequest
+                {
+                    MasterId = command.MasterId ?? "master-01",
+                    ParameterName = command.ParameterName,
+                    PortNumber = command.PortNumber
+                };
+
+                var response = await _masterService.ReadParameter(request, null!);
+
+                if (response.ErrorCode == 0)
+                {
+                    // Also send to IoT Hub as telemetry
+                    await SendCommandResultAsync(
+                        request.MasterId,
+                        "readParameter",
+                        command.ParameterName,
+                        response.Variable?.Value,
+                        response.ErrorCode,
+                        response.ErrorMessage
+                    );
+
+                    // Return the actual value in the Direct Method response
+                    var result = new 
+                    { 
+                        status = "success", 
+                        parameterName = command.ParameterName,
+                        value = response.Variable?.Value ?? "",
+                        dataType = response.Variable?.DataType ?? "",
+                        errorCode = response.ErrorCode,
+                        errorMessage = response.ErrorMessage
+                    };
+                    var resultJson = JsonSerializer.Serialize(result);
+                    return new MethodResponse(Encoding.UTF8.GetBytes(resultJson), 200);
+                }
+                else
+                {
+                    var error = new 
+                    { 
+                        status = "error", 
+                        parameterName = command.ParameterName,
+                        errorCode = response.ErrorCode,
+                        message = response.ErrorMessage 
+                    };
+                    return new MethodResponse(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(error)), 400);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error handling ReadParameter direct method");
+                var error = new { status = "error", message = ex.Message };
+                return new MethodResponse(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(error)), 500);
+            }
+        }
+
+        private async Task<MethodResponse> HandleWriteParameterMethod(MethodRequest methodRequest, object userContext)
+        {
+            _logger.LogInformation("Direct Method 'WriteParameter' invoked");
+
+            try
+            {
+                var payload = Encoding.UTF8.GetString(methodRequest.Data);
+                var command = JsonSerializer.Deserialize<CloudCommand>(payload, new JsonSerializerOptions 
+                { 
+                    PropertyNameCaseInsensitive = true 
+                });
+
+                if (command == null || string.IsNullOrEmpty(command.ParameterName) || string.IsNullOrEmpty(command.Value))
+                {
+                    return new MethodResponse(Encoding.UTF8.GetBytes("{\"status\":\"error\",\"message\":\"Invalid request - ParameterName and Value required\"}"), 400);
+                }
+
+                if (_masterService == null)
+                {
+                    return new MethodResponse(Encoding.UTF8.GetBytes("{\"status\":\"error\",\"message\":\"Master service not initialized\"}"), 500);
+                }
+
+                // Call the gRPC service method directly
+                var request = new WriteParameterRequest
+                {
+                    MasterId = command.MasterId ?? "master-01",
+                    ParameterName = command.ParameterName,
+                    Value = command.Value,
+                    PortNumber = command.PortNumber
+                };
+
+                var response = await _masterService.WriteParameter(request, null!);
+
+                // Send to IoT Hub as telemetry
+                await SendCommandResultAsync(
+                    request.MasterId,
+                    "writeParameter",
+                    command.ParameterName,
+                    command.Value,
+                    response.ErrorCode,
+                    response.ErrorMessage
+                );
+
+                if (response.ErrorCode == 0)
+                {
+                    var result = new 
+                    { 
+                        status = "success", 
+                        parameterName = command.ParameterName,
+                        value = command.Value,
+                        message = "Parameter written successfully"
+                    };
+                    return new MethodResponse(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(result)), 200);
+                }
+                else
+                {
+                    var error = new 
+                    { 
+                        status = "error", 
+                        parameterName = command.ParameterName,
+                        errorCode = response.ErrorCode,
+                        message = response.ErrorMessage 
+                    };
+                    return new MethodResponse(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(error)), 400);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error handling WriteParameter direct method");
+                var error = new { status = "error", message = ex.Message };
+                return new MethodResponse(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(error)), 500);
+            }
+        }
+
+        private async Task<MethodResponse> HandleGetAllParametersMethod(MethodRequest methodRequest, object userContext)
+        {
+            _logger.LogInformation("Direct Method 'GetAllParameters' invoked");
+
+            try
+            {
+                var payload = methodRequest.Data != null && methodRequest.Data.Length > 0
+                    ? Encoding.UTF8.GetString(methodRequest.Data)
+                    : "{}";
+
+                var command = JsonSerializer.Deserialize<CloudCommand>(payload, new JsonSerializerOptions 
+                { 
+                    PropertyNameCaseInsensitive = true 
+                }) ?? new CloudCommand();
+
+                if (_masterService == null)
+                {
+                    return new MethodResponse(Encoding.UTF8.GetBytes("{\"status\":\"error\",\"message\":\"Master service not initialized\"}"), 500);
+                }
+
+                var masterId = command.MasterId ?? "master-01";
+
+                // Get all parameter names
+                var getAllRequest = new GetAllParametersRequest { MasterId = masterId };
+                var getAllResponse = await _masterService.GetAllParameters(getAllRequest, null!);
+
+                if (getAllResponse.ParameterNames.Count == 0)
+                {
+                    return new MethodResponse(Encoding.UTF8.GetBytes("{\"status\":\"error\",\"message\":\"No parameters found\"}"), 404);
+                }
+
+                // Read all parameter values
+                var parameters = new List<object>();
+                foreach (var paramName in getAllResponse.ParameterNames)
+                {
+                    try
+                    {
+                        var readRequest = new ReadParameterRequest
+                        {
+                            MasterId = masterId,
+                            ParameterName = paramName,
+                            PortNumber = 0
+                        };
+
+                        var readResponse = await _masterService.ReadParameter(readRequest, null!);
+
+                        if (readResponse.ErrorCode == 0)
+                        {
+                            parameters.Add(new 
+                            {
+                                name = paramName,
+                                value = readResponse.Variable?.Value ?? "",
+                                dataType = readResponse.Variable?.DataType ?? ""
+                            });
+
+                            // Also send each to IoT Hub as telemetry
+                            await SendTelemetryAsync(masterId, paramName, readResponse.Variable?.Value ?? "", 0);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to read parameter {ParameterName}", paramName);
+                    }
+                }
+
+                // Send summary
+                await SendCommandResultAsync(
+                    masterId,
+                    "getAllParameters",
+                    "AllParameters",
+                    $"{parameters.Count} parameters retrieved",
+                    0,
+                    $"Successfully retrieved {parameters.Count} parameters"
+                );
+
+                // Return all parameters in Direct Method response
+                var result = new 
+                { 
+                    status = "success", 
+                    count = parameters.Count,
+                    parameters = parameters
+                };
+
+                return new MethodResponse(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(result)), 200);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error handling GetAllParameters direct method");
+                var error = new { status = "error", message = ex.Message };
+                return new MethodResponse(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(error)), 500);
+            }
+        }
+
+        private Task<MethodResponse> HandleDefaultMethod(MethodRequest methodRequest, object userContext)
+        {
+            _logger.LogWarning("Unknown direct method called: {MethodName}", methodRequest.Name);
+
+            var error = new { status = "error", message = $"Method '{methodRequest.Name}' not found" };
+            var errorJson = JsonSerializer.Serialize(error);
+            return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes(errorJson), 404));
         }
     }
 

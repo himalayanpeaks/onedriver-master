@@ -43,6 +43,15 @@ In the **"Message to device"** section in Azure Portal, send:
 }
 ```
 
+### To Read All Params
+```json
+{
+  "Action": "getAllParameters",
+  "MasterId": "master-01",
+  "PortNumber": 0
+}
+```
+
 ## How It Works
 
 1. **You send a message** from Azure Portal (or any cloud app)

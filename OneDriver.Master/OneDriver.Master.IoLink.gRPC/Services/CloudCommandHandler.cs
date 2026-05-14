@@ -36,6 +36,12 @@ namespace OneDriver.Master.IoLink.gRPC.Services
 
                 switch (command.Action.ToLowerInvariant())
                 {
+                    case "getallparameters":
+                    case "getall":
+                        _logger.LogInformation("Executing GET ALL PARAMETERS command");
+                        await HandleGetAllParametersAsync(masterId);
+                        break;
+
                     case "readparameter":
                     case "read":
                         _logger.LogInformation("Executing READ command for {ParameterName}", command.ParameterName);
@@ -149,6 +155,78 @@ namespace OneDriver.Master.IoLink.gRPC.Services
 
             _logger.LogInformation("Write command {CommandName} = {Value} (ErrorCode: {ErrorCode})", 
                 commandName, value, response.ErrorCode);
+        }
+
+        private async Task HandleGetAllParametersAsync(string masterId)
+        {
+            var request = new GetAllParametersRequest
+            {
+                MasterId = masterId
+            };
+
+            var response = await _masterService.GetAllParameters(request, null!);
+
+            if (response.ParameterNames.Count > 0)
+            {
+                _logger.LogInformation("Found {Count} parameters, reading each one...", response.ParameterNames.Count);
+
+                // Send each parameter name and read its value
+                foreach (var paramName in response.ParameterNames)
+                {
+                    try
+                    {
+                        var readRequest = new ReadParameterRequest
+                        {
+                            MasterId = masterId,
+                            ParameterName = paramName,
+                            PortNumber = 0
+                        };
+
+                        var readResponse = await _masterService.ReadParameter(readRequest, null!);
+
+                        if (readResponse.ErrorCode == 0)
+                        {
+                            await _iotHubService.SendTelemetryAsync(
+                                masterId,
+                                paramName,
+                                readResponse.Variable?.Value ?? "",
+                                0
+                            );
+
+                            _logger.LogDebug("Sent {ParameterName} = {Value}", paramName, readResponse.Variable?.Value);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to read parameter {ParameterName}", paramName);
+                    }
+                }
+
+                _logger.LogInformation("Successfully sent all {Count} parameters to Azure IoT Hub", response.ParameterNames.Count);
+
+                // Send summary result
+                await _iotHubService.SendCommandResultAsync(
+                    masterId,
+                    "getAllParameters",
+                    "AllParameters",
+                    $"{response.ParameterNames.Count} parameters sent",
+                    0,
+                    $"Successfully retrieved {response.ParameterNames.Count} parameters"
+                );
+            }
+            else
+            {
+                _logger.LogWarning("No parameters found for master {MasterId}", masterId);
+
+                await _iotHubService.SendCommandResultAsync(
+                    masterId,
+                    "getAllParameters",
+                    "AllParameters",
+                    null,
+                    1,
+                    "No parameters found"
+                );
+            }
         }
     }
 }
