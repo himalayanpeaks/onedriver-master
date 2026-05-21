@@ -399,3 +399,4 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 /OneDriver.Master/OneDriver.Master.IoLink.gRPC/appsettings.json
+/OneDriver.Master/OneDriver.Master.IoLink.gRPC/AZURE_SETUP.md
