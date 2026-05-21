@@ -13,8 +13,9 @@ namespace OneDriver.Master.IoLink.Products
         private byte ProcessDataSubIndex { get; set; }
         protected override void FetchDataForTunnel(ref InternalDataHAL data)
         {
-            var err = ReadRecord(ProcessDataIndex, ProcessDataSubIndex, out var readBuffer, out var length, out _, out _);
-            data = new InternalDataHAL(SensorPortNumber, ProcessDataIndex, ProcessDataSubIndex, readBuffer);
+            byte[] readBuffer = new byte[0];
+            var err = ProcessDataReadInputs(ref readBuffer, out var length, out var status);
+            data = new InternalDataHAL(SensorPortNumber, readBuffer);
             if (err != t_eInternal_Return_Codes.RETURN_OK || length == 0)
                 Log.Error("Process data index " + ProcessDataIndex + " couldn't be read: " + err);
         }
@@ -270,12 +271,60 @@ namespace OneDriver.Master.IoLink.Products
 
         public t_eInternal_Return_Codes ProcessDataReadInputs(ref byte[] pData, out uint length, out uint status)
         {
-            throw new NotImplementedException();
+            length = 0;
+            status = 0;
+            uint maxLength = 32; // Max process data length for IO-Link
+
+            IntPtr processDataPtr = Marshal.AllocHGlobal((int)maxLength);
+            try
+            {
+                var result = IOL_ReadInputs(_handle, (uint)SensorPortNumber, processDataPtr, ref length, ref status);
+
+                if (result == 0 && length > 0)
+                {
+                    pData = new byte[length];
+                    Marshal.Copy(processDataPtr, pData, 0, (int)length);
+                }
+                else
+                {
+                    pData = new byte[0];
+                }
+
+                return (t_eInternal_Return_Codes)result;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"ProcessDataReadInputs failed: {ex.Message}");
+                pData = new byte[0];
+                return t_eInternal_Return_Codes.No_details;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(processDataPtr);
+            }
         }
 
         public t_eInternal_Return_Codes ProcessDataWriteOutputs(ref byte[] pData, uint length)
         {
-            throw new NotImplementedException();
+            if (pData == null || length == 0)
+                return t_eInternal_Return_Codes.RETURN_OK;
+
+            IntPtr processDataPtr = Marshal.AllocHGlobal((int)length);
+            try
+            {
+                Marshal.Copy(pData, 0, processDataPtr, (int)length);
+                var status = IOL_WriteOutputs(_handle, (uint)SensorPortNumber, processDataPtr, length);
+                return (t_eInternal_Return_Codes)status;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"ProcessDataWriteOutputs failed: {ex.Message}");
+                return t_eInternal_Return_Codes.No_details;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(processDataPtr);
+            }
         }
 
         public t_eInternal_Return_Codes ProcessDataTransfer(ref byte[] pDataOut, uint lengthOut, ref byte[] pDataIn, out uint lengthIn,

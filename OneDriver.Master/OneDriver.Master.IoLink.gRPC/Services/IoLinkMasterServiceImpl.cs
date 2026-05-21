@@ -437,38 +437,6 @@ namespace OneDriver.Master.IoLink.gRPC.Services
             }
         }
 
-        public override Task<AddProcessDataIndexResponse> AddProcessDataIndex(AddProcessDataIndexRequest request, ServerCallContext context)
-        {
-            try
-            {
-                if (!_devices.TryGetValue(request.MasterId, out var device))
-                {
-                    return Task.FromResult(new AddProcessDataIndexResponse
-                    {
-                        ErrorCode = -1,
-                        ErrorMessage = "Device not found"
-                    });
-                }
-
-                var result = device.AddProcessDataIndex(request.ProcessDataIndex);
-                return Task.FromResult(new AddProcessDataIndexResponse
-                {
-                    ErrorCode = (int)result,
-                    ErrorMessage = result.ToString(),
-                    LengthInBytes = 0 // You may need to capture this from AddProcessDataIndex
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error adding process data index {Index}", request.ProcessDataIndex);
-                return Task.FromResult(new AddProcessDataIndexResponse
-                {
-                    ErrorCode = -1,
-                    ErrorMessage = ex.Message
-                });
-            }
-        }
-
         public override Task<GetDescriptorResponse> GetDescriptor(GetDescriptorRequest request, ServerCallContext context)
         {
             try

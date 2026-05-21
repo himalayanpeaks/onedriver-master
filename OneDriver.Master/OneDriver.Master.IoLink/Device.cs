@@ -21,7 +21,7 @@ namespace OneDriver.Master.IoLink
 
         public Device(string name, IValidator validator, IMasterHAL deviceHAL, Descriptor descriptor) :
             base(new DeviceParams(name), validator,
-                new ObservableCollection<BaseChannel<ChannelParams>>(), descriptor)
+                [], descriptor)
         {
             DeviceHAL = deviceHAL;
             Init();
@@ -32,7 +32,7 @@ namespace OneDriver.Master.IoLink
             Parameters.PropertyChanging += Parameters_PropertyChanging;
             Parameters.PropertyChanged += Parameters_PropertyChanged;
             Parameters.PropertyReadRequested += Parameters_PropertyReadRequested;
-            DeviceHAL.AttachToProcessDataEvent(ProcessDataChanged);
+            DeviceHAL.AttachToProcessDataEvent(ProcessDataChanged);            
 
             for (var i = 0; i < DeviceHAL.NumberOfChannels; i++)
             {
@@ -57,11 +57,11 @@ namespace OneDriver.Master.IoLink
             if (e.Data == null)
                 return;
 
-            var local = _descriptor.Variables.PdInCollection.ToList().FindAll(x => x.Index == e.Index);
+            var local = _descriptor.Variables.PdInCollection.ToList();
             foreach (var parameter in local)
             {
                 var processValue = DataConverter.MaskByteArray(e.Data, parameter.Offset, parameter.LengthInBits,
-                    parameter.DataType, true);
+                    parameter.DataType, false);
                 TrySetVariableValue(parameter, processValue);
             }
         }
@@ -89,8 +89,6 @@ namespace OneDriver.Master.IoLink
                     break;
             }
         }
-        public Products.Definition.t_eInternal_Return_Codes AddProcessDataIndex(int processDataIndex) => DeviceHAL.SetProcessData((ushort)processDataIndex, out var length);
-
 
         private void Parameters_PropertyChanging(object sender, PropertyValidationEventArgs e)
         {
@@ -108,12 +106,20 @@ namespace OneDriver.Master.IoLink
         {
             var err = DeviceHAL.ConnectSensorWithMaster();
             Log.Information(err.ToString());
-
-            return (err == Products.Definition.t_eInternal_Return_Codes.RETURN_OK) ? 0
-                : (int)Abstract.Contracts.Definition.Error.SensorCommunicationError;
+            if (err == Products.Definition.t_eInternal_Return_Codes.RETURN_OK)
+            {
+                DeviceHAL.StartProcessDataAnnouncer();
+                return 0;
+            }
+            else
+                return (int)Abstract.Contracts.Definition.Error.SensorCommunicationError;
         }
 
-        public override int DisconnectSensor() => (int)DeviceHAL.DisconnectSensorFromMaster();
+        public override int DisconnectSensor()
+        {
+            DeviceHAL.StopProcessDataAnnouncer();
+            return (int)DeviceHAL.DisconnectSensorFromMaster();
+        }
 
         protected override string GetErrorAsText(int errorCode)
         {
@@ -152,7 +158,7 @@ namespace OneDriver.Master.IoLink
             if (param.DataType == DataType.UINT || param.DataType == DataType.INT || param.DataType == DataType.Float32 ||
                 param.DataType == DataType.Byte || param.DataType == DataType.BOOL)
             {
-                DataConverter.ToNumber(data, param.DataType, param.LengthInBits, true, out string?[] valueData);
+                DataConverter.ToNumber(data, param.DataType, param.LengthInBits, true, out var valueData);
                 if (valueData == null)
                 {
                     TrySetVariableValue(param, string.Join(";", data.Select(x => x.ToString()).ToArray()));
@@ -177,9 +183,11 @@ namespace OneDriver.Master.IoLink
         protected override int WriteParam(BasicVariable param)
         {
             if (string.IsNullOrEmpty(param.Value))
+            {
                 Log.Error(param.Name + " Data null");
-
-            string[] dataToWrite = param.Value.Split(';').ToArray();
+                return (int)Abstract.Contracts.Definition.Error.ParameterNotFound;
+            }
+            string[] dataToWrite = [.. param.Value.Split(';')];
             DataConverter.DataError dataError;
             if ((dataError = DataConverter.ToByteArray(dataToWrite, param.DataType, param.LengthInBits,
                     true, out var returnedData, param.ArrayCount)) != DataConverter.DataError.NoError)
