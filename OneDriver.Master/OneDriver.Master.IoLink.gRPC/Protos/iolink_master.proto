@@ -191,6 +191,16 @@ message ProcessDataUpdate {
   int32 subindex = 3;
   bytes data = 4;
   int64 timestamp = 5;
+  string parameter_name = 6;
+  string display_name = 7;
+  string value = 8;
+  string data_type = 9;
+  string minimum = 10;
+  string maximum = 11;
+  int32 length_in_bits = 12;
+  int32 process_data_index = 13;
+  bool is_parameter = 14;
+  bool is_process_data = 15;
 }
 
 // Descriptor and metadata messages
@@ -229,6 +239,8 @@ message VariableData {
   int32 offset = 7;
   bool is_dynamic = 8;
   int32 array_count = 9;
+  string variable_kind = 10;  // Parameter, Command, ProcessData, etc.
+  string display_name = 11;
 }
 
 message DeviceInfo {

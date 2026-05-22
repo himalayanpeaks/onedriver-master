@@ -6,6 +6,7 @@ using OneDriver.Framework.Base;
 using OneDriver.Framework.Libs.Validator;
 using OneDriver.Master.Abstract;
 using OneDriver.Master.IoLink.Channels;
+using OneDriver.Master.IoLink.Events;
 using OneDriver.Master.IoLink.Products;
 using OneDriver.Module.Channel;
 using Serilog;
@@ -18,6 +19,8 @@ namespace OneDriver.Master.IoLink
     public class Device : CommonDevice<DeviceParams, ChannelParams, Variable>
     {
         private IMasterHAL DeviceHAL { get; set; }
+
+        public event EventHandler<ProcessDataEventArgs>? ProcessDataReceived;
 
         public Device(string name, IValidator validator, IMasterHAL deviceHAL, Descriptor descriptor) :
             base(new DeviceParams(name), validator,
@@ -54,7 +57,7 @@ namespace OneDriver.Master.IoLink
 
         private void ProcessDataChanged(object sender, InternalDataHAL e)
         {
-            if (e.Data == null)
+            if (e.Data == null || e.Data.Length == 0)
                 return;
 
             var local = _descriptor.Variables.PdInCollection.ToList();
@@ -63,6 +66,9 @@ namespace OneDriver.Master.IoLink
                 var processValue = DataConverter.MaskByteArray(e.Data, parameter.Offset, parameter.LengthInBits,
                     parameter.DataType, false);
                 TrySetVariableValue(parameter, processValue);
+
+                // Raise event for each parameter with channel and timestamp info
+                ProcessDataReceived?.Invoke(this, new ProcessDataEventArgs(parameter, e.ChannelNumber, e.TimeStamp));
             }
         }
 

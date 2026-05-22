@@ -19,4 +19,9 @@
     <ProjectReference Include="..\OneDriver.Master.Factory\OneDriver.Master.Factory.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="clients\csharp\ProcessDataMonitor\" />
+    <Folder Include="wwwroot\" />
+  </ItemGroup>
+
 </Project>

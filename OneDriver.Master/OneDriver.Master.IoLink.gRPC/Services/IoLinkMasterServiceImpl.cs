@@ -509,6 +509,73 @@ namespace OneDriver.Master.IoLink.gRPC.Services
             }
         }
 
+        public override async Task StreamProcessData(StreamProcessDataRequest request, IServerStreamWriter<ProcessDataUpdate> responseStream, ServerCallContext context)
+        {
+            try
+            {
+                if (!_devices.TryGetValue(request.MasterId, out var device))
+                {
+                    _logger.LogError("Device {MasterId} not found for process data streaming", request.MasterId);
+                    return;
+                }
+
+                if (request.PortNumber > 0)
+                {
+                    device.SelectSensorAtPort(request.PortNumber);
+                }
+
+                _logger.LogInformation("Starting process data streaming for {MasterId}, port {PortNumber}", request.MasterId, request.PortNumber);
+
+                var taskCompletionSource = new TaskCompletionSource<bool>();
+
+                void ProcessDataHandler(object? sender, IoLink.Events.ProcessDataEventArgs e)
+                {
+                    var update = new ProcessDataUpdate
+                    {
+                        ChannelNumber = e.ChannelNumber,
+                        Index = e.Parameter.Index,
+                        Subindex = e.Parameter.Subindex,
+                        Data = Google.Protobuf.ByteString.CopyFrom(System.Text.Encoding.UTF8.GetBytes(e.Parameter.Value ?? string.Empty)),
+                        Timestamp = new DateTimeOffset(e.TimeStamp).ToUnixTimeMilliseconds(),
+                        ParameterName = e.Parameter.Name ?? string.Empty,
+                        DisplayName = e.Parameter.DisplayName ?? string.Empty,
+                        Value = e.Parameter.Value ?? string.Empty,
+                        DataType = e.Parameter.DataType.ToString(),
+                        Minimum = e.Parameter.Minimum ?? string.Empty,
+                        Maximum = e.Parameter.Maximum ?? string.Empty,
+                        LengthInBits = e.Parameter.LengthInBits
+                    };
+
+                    try
+                    {
+                        responseStream.WriteAsync(update).Wait();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error writing process data to stream");
+                        taskCompletionSource.TrySetResult(false);
+                    }
+                }
+
+                device.ProcessDataReceived += ProcessDataHandler;
+
+                try
+                {
+                    context.CancellationToken.Register(() => taskCompletionSource.TrySetResult(true));
+                    await taskCompletionSource.Task;
+                }
+                finally
+                {
+                    device.ProcessDataReceived -= ProcessDataHandler;
+                    _logger.LogInformation("Stopped process data streaming for {MasterId}", request.MasterId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in StreamProcessData for {MasterId}", request.MasterId);
+            }
+        }
+
         private VariableData MapVariableToProto(DeviceDescriptor.IoLink.Variables.Variable variable)
         {
             return new VariableData
@@ -521,7 +588,8 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                 LengthInBits = variable.LengthInBits,
                 Offset = variable.Offset,
                 IsDynamic = variable.IsDynamic,
-                ArrayCount = variable.ArrayCount
+                ArrayCount = variable.ArrayCount,
+                VariableKind = variable.Kind.ToString()
             };
         }
     }
