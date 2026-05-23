@@ -40,6 +40,16 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                 if (!_devices.TryGetValue(request.MasterId, out var device))
                 {
                     var descriptor = DeviceDescriptorFactory.CreateIoLinkDescriptor(DescriptorType.IoddFinder, new DescriptorRequest());
+                    if (descriptor == null)
+                    {
+                        return Task.FromResult(new ConnectResponse
+                        {
+                            ErrorCode = -1,
+                            ErrorMessage = "Failed to create descriptor",
+                            IsConnected = false
+                        });
+                    }
+
                     var deviceHAL = new TmgMaster2();
                     device = MasterFactory.CreateIoLinkMaster(MasterType.TmgMaster2, deviceHAL, descriptor);
 
@@ -589,7 +599,8 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                 Offset = variable.Offset,
                 IsDynamic = variable.IsDynamic,
                 ArrayCount = variable.ArrayCount,
-                VariableKind = variable.Kind.ToString()
+                VariableKind = variable.Kind.ToString(),
+                DisplayName = variable.DisplayName ?? string.Empty
             };
         }
     }
