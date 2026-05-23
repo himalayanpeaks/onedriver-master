@@ -11,14 +11,7 @@ namespace OneDriver.Master.IoLink.Products
     {
         private ushort ProcessDataIndex { get; set; }
         private byte ProcessDataSubIndex { get; set; }
-
-        /// <summary>
-        /// Delay in milliseconds between process data reads to prevent USB buffer overflow.
-        /// TMG Master 2 requires minimum 20ms between reads to avoid red LED fault state.
-        /// Default: 50ms (safe for most applications)
-        /// Minimum recommended: 20ms
-        /// </summary>
-        public int ProcessDataReadDelayMs { get; set; } = 50;
+        public int ProcessDataReadDelayMs { get; set; } = 100;
 
         protected override void FetchDataForTunnel(ref InternalDataHAL data)
         {
