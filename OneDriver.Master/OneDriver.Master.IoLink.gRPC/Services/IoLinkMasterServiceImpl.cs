@@ -588,7 +588,7 @@ namespace OneDriver.Master.IoLink.gRPC.Services
 
         private VariableData MapVariableToProto(DeviceDescriptor.IoLink.Variables.Variable variable)
         {
-            return new VariableData
+            var result = new VariableData
             {
                 Name = variable.Name ?? string.Empty,
                 Index = variable.Index,
@@ -600,8 +600,11 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                 IsDynamic = variable.IsDynamic,
                 ArrayCount = variable.ArrayCount,
                 VariableKind = variable.Kind.ToString(),
-                DisplayName = variable.DisplayName ?? string.Empty
+                DisplayName = variable.DisplayName ?? string.Empty,
+                Minimum = variable.Minimum ?? string.Empty,
+                Maximum = variable.Maximum ?? string.Empty
             };
+            return result;
         }
     }
 }
