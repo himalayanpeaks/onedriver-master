@@ -400,3 +400,4 @@ FodyWeavers.xsd
 *.sln.iml
 /OneDriver.Master/OneDriver.Master.IoLink.gRPC/appsettings.json
 /OneDriver.Master/OneDriver.Master.IoLink.gRPC/AZURE_SETUP.md
+/docs/IO-Link_Test-Spec_100032_M1.1.5_Oct-2025.pdf

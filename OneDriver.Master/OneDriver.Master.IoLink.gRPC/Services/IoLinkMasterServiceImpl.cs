@@ -600,9 +600,7 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                 IsDynamic = variable.IsDynamic,
                 ArrayCount = variable.ArrayCount,
                 VariableKind = variable.Kind.ToString(),
-                DisplayName = variable.DisplayName ?? string.Empty,
-                Minimum = variable.Minimum ?? string.Empty,
-                Maximum = variable.Maximum ?? string.Empty
+                DisplayName = variable.DisplayName ?? string.Empty
             };
             return result;
         }
