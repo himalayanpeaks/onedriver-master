@@ -11,7 +11,7 @@ namespace OneDriver.Master.IoLink.Products
     {
         private ushort ProcessDataIndex { get; set; }
         private byte ProcessDataSubIndex { get; set; }
-        public int ProcessDataReadDelayMs { get; set; } = 100;
+        public int ProcessDataReadDelayMs { get; set; } = 200;
 
         protected override void FetchDataForTunnel(ref InternalDataHAL data)
         {
@@ -55,7 +55,11 @@ namespace OneDriver.Master.IoLink.Products
 
         public void StartProcessDataAnnouncer() => StartAnnouncingData();
 
-        public void StopProcessDataAnnouncer() => StopAnnouncingData();
+        public void StopProcessDataAnnouncer()
+        {
+            StopAnnouncingData();
+            OneDriver.Toolbox.Tools.Wait((uint)ProcessDataReadDelayMs); //Wait for announcer to stop
+        }
 
         public void AttachToProcessDataEvent(DataEventHandler processDataEventHandler)
             => DataEvent += processDataEventHandler;
@@ -68,7 +72,7 @@ namespace OneDriver.Master.IoLink.Products
 
         public t_eInternal_Return_Codes DisconnectSensorFromMaster()
         {
-            StopAnnouncingData();
+            StopProcessDataAnnouncer();
             return ConnectSensorWithMaster(t_eTargetMode.SM_MODE_IOLINK_FALLBACK);
         }
 
@@ -81,7 +85,9 @@ namespace OneDriver.Master.IoLink.Products
                 SubIndex = subIndex
             };
 
+            StopProcessDataAnnouncer();            
             var status = IOL_ReadReq(_handle, (uint)SensorPortNumber, ref param);
+            StartProcessDataAnnouncer();
 
             var readArray = new byte[param.Length];
             readBuffer = new byte[param.Length];
@@ -109,7 +115,9 @@ namespace OneDriver.Master.IoLink.Products
                 param.Length = Convert.ToByte(writeBuffer.Length);
                 for (var i = 0; i < writeBuffer.Length; i++)
                     param.Result[i] = writeBuffer[i];
+                StopProcessDataAnnouncer();
                 status = IOL_WriteReq(_handle, (uint)SensorPortNumber, ref param);
+                StartProcessDataAnnouncer();
             }
 
             /***Assign values...****/
@@ -218,6 +226,7 @@ namespace OneDriver.Master.IoLink.Products
 
         public t_eInternal_Return_Codes SetCommand(t_eCommands command)
         {
+            StopProcessDataAnnouncer();            
             return t_eInternal_Return_Codes.RETURN_OK;
         }
 
@@ -248,6 +257,8 @@ namespace OneDriver.Master.IoLink.Products
             pdValid = 0;
             localGenerated = 0;
             sensorStatus = 0;
+
+
             return t_eInternal_Return_Codes.RETURN_OK;
         }
 
@@ -280,15 +291,11 @@ namespace OneDriver.Master.IoLink.Products
             IntPtr processDataPtr = Marshal.AllocHGlobal((int)maxLength);
             try
             {
-                var result = IOL_ReadInputs(_handle, (uint)SensorPortNumber, processDataPtr, ref length, ref status);
-
-                // Delay to prevent USB buffer overflow and master fault state (red LED)
-                // TMG Master 2 hardware requires time between consecutive USB reads
                 if (ProcessDataReadDelayMs > 0)
                 {
                     Thread.Sleep(ProcessDataReadDelayMs);
                 }
-
+                var result = IOL_ReadInputs(_handle, (uint)SensorPortNumber, processDataPtr, ref length, ref status);
                 if (result == 0 && length > 0)
                 {
                     pData = new byte[length];
@@ -298,7 +305,6 @@ namespace OneDriver.Master.IoLink.Products
                 {
                     pData = new byte[0];
                 }
-
                 return (t_eInternal_Return_Codes)result;
             }
             catch (Exception ex)

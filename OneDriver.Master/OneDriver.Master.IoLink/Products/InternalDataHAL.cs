@@ -4,21 +4,21 @@ namespace OneDriver.Master.IoLink.Products
 {
     public class InternalDataHAL : BaseDataForAnnouncement
     {
-        public InternalDataHAL(int channelNumber, byte[] data)
+        public InternalDataHAL(int channelNumber, byte[] processdata)
         {
             TimeStamp = DateTime.Now;
             ChannelNumber = channelNumber;
-            Data = data;
+            ProcessData = processdata;
         }
 
         public InternalDataHAL()
         {
             TimeStamp = DateTime.Now;
-            Data = new byte[0];
+            ProcessData = new byte[0];
             ChannelNumber = 0;
         }
 
         public int ChannelNumber { get; } = 0;
-        public byte[] Data { get; }
+        public byte[] ProcessData { get; }
     }
 }

@@ -50,23 +50,67 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                 return;
             }
 
-            try
-            {
-                // Set up C2D message handler
-                await _deviceClient.SetReceiveMessageHandlerAsync(ReceiveC2dMessageAsync, null);
-                _logger.LogInformation("Started listening for Cloud-to-Device messages from Azure");
+            const int maxRetries = 3;
+            const int delayMilliseconds = 2000;
 
-                // Set up Direct Method handlers
-                await _deviceClient.SetMethodHandlerAsync("ReadParameter", HandleReadParameterMethod, null);
-                await _deviceClient.SetMethodHandlerAsync("WriteParameter", HandleWriteParameterMethod, null);
-                await _deviceClient.SetMethodHandlerAsync("GetAllParameters", HandleGetAllParametersMethod, null);
-                await _deviceClient.SetMethodDefaultHandlerAsync(HandleDefaultMethod, null);
-
-                _logger.LogInformation("Started listening for Direct Methods from Azure");
-            }
-            catch (Exception ex)
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
-                _logger.LogError(ex, "Failed to start receiving commands");
+                try
+                {
+                    _logger.LogInformation("Attempt {Attempt} of {MaxRetries} to start receiving commands", attempt, maxRetries);
+
+                    // First, ensure the device is connected by opening the connection explicitly
+                    await _deviceClient.OpenAsync();
+                    _logger.LogInformation("Device client connection opened successfully");
+
+                    // Add a small delay to ensure the MQTT connection is fully established
+                    await Task.Delay(500);
+
+                    // Set up C2D message handler
+                    await _deviceClient.SetReceiveMessageHandlerAsync(ReceiveC2dMessageAsync, null);
+                    _logger.LogInformation("Started listening for Cloud-to-Device messages from Azure");
+
+                    // Set up Direct Method handlers
+                    await _deviceClient.SetMethodHandlerAsync("ReadParameter", HandleReadParameterMethod, null);
+                    await _deviceClient.SetMethodHandlerAsync("WriteParameter", HandleWriteParameterMethod, null);
+                    await _deviceClient.SetMethodHandlerAsync("GetAllParameters", HandleGetAllParametersMethod, null);
+                    await _deviceClient.SetMethodDefaultHandlerAsync(HandleDefaultMethod, null);
+
+                    _logger.LogInformation("Started listening for Direct Methods from Azure");
+
+                    // Success - exit retry loop
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to start receiving commands (attempt {Attempt}/{MaxRetries})", attempt, maxRetries);
+
+                    if (attempt < maxRetries)
+                    {
+                        _logger.LogInformation("Retrying in {Delay}ms...", delayMilliseconds);
+                        await Task.Delay(delayMilliseconds);
+
+                        // Try to recreate the device client on network errors
+                        if (ex is System.Net.Sockets.SocketException || 
+                            ex.GetType().Name.Contains("IotHubCommunicationException"))
+                        {
+                            try
+                            {
+                                _deviceClient?.Dispose();
+                                _deviceClient = DeviceClient.CreateFromConnectionString(_connectionString, TransportType.Mqtt);
+                                _logger.LogInformation("Recreated device client after connection failure");
+                            }
+                            catch (Exception recreateEx)
+                            {
+                                _logger.LogError(recreateEx, "Failed to recreate device client");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogError("All {MaxRetries} attempts to start receiving commands failed", maxRetries);
+                    }
+                }
             }
         }
 

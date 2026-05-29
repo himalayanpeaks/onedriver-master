@@ -30,6 +30,13 @@ namespace OneDriver.Master.IoLink.gRPC.Services
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
+            _ = Task.Run(() => InitializeMasterAsync(cancellationToken), cancellationToken);
+            _logger.LogInformation("IO-Link initialization started in background.");
+            await Task.CompletedTask;
+        }
+
+        private async Task InitializeMasterAsync(CancellationToken cancellationToken)
+        {
             try
             {
                 var autoConnect = _configuration.GetValue<bool>("IoLinkMaster:AutoConnectOnStartup");
@@ -122,8 +129,6 @@ namespace OneDriver.Master.IoLink.gRPC.Services
             {
                 _logger.LogError(ex, "Error during master initialization");
             }
-
-            await Task.CompletedTask;
         }
 
         public Task StopAsync(CancellationToken cancellationToken)

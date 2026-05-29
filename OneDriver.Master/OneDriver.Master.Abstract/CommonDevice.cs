@@ -7,6 +7,7 @@ using OneDriver.Master.Abstract.Channels;
 using OneDriver.Master.Abstract.Contracts;
 using OneDriver.Module.Channel;
 using OneDriver.Module.Device;
+using OneDriver.Toolbox;
 using Serilog;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -90,11 +91,20 @@ namespace OneDriver.Master.Abstract
             }
 
             foreach (var param in _descriptor.Variables.StandardVariables)
+            {
                 ReadParameterFromSensor(param);
+                Tools.Wait(100);
+            }
             foreach (var param in _descriptor.Variables.SpecificVariables)
+            {
                 ReadParameterFromSensor(param);
+                Tools.Wait(100);
+            }
             foreach (var param in _descriptor.Variables.SystemVariables)
+            {
                 ReadParameterFromSensor(param);
+                Tools.Wait(100);
+            }
 
             return Contracts.Definition.Error.NoError;
         }
