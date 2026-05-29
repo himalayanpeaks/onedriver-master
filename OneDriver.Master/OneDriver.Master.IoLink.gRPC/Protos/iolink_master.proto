@@ -28,6 +28,10 @@ service IoLinkMasterService {
     
   // Real-time process data streaming
   rpc StreamProcessData(StreamProcessDataRequest) returns (stream ProcessDataUpdate);
+
+  // Process data announcement control
+  rpc StartProcessDataAnnouncement(StartProcessDataAnnouncementRequest) returns (StartProcessDataAnnouncementResponse);
+  rpc StopProcessDataAnnouncement(StopProcessDataAnnouncementRequest) returns (StopProcessDataAnnouncementResponse);
   
   // Descriptor and metadata
   rpc GetDescriptor(GetDescriptorRequest) returns (GetDescriptorResponse);
@@ -183,6 +187,27 @@ message AddProcessDataIndexResponse {
 message StreamProcessDataRequest {
   string master_id = 1;
   int32 port_number = 2;
+}
+
+// Process data announcement control
+message StartProcessDataAnnouncementRequest {
+  string master_id = 1;
+}
+
+message StartProcessDataAnnouncementResponse {
+  int32 error_code = 1;
+  string error_message = 2;
+  bool is_started = 3;
+}
+
+message StopProcessDataAnnouncementRequest {
+  string master_id = 1;
+}
+
+message StopProcessDataAnnouncementResponse {
+  int32 error_code = 1;
+  string error_message = 2;
+  bool is_stopped = 3;
 }
 
 message ProcessDataUpdate {

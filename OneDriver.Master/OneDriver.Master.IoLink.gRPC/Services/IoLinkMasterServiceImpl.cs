@@ -586,7 +586,7 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                     device.SelectSensorAtPort(request.PortNumber);
                 }
 
-                _logger.LogInformation("Starting process data streaming for {MasterId}, port {PortNumber}", request.MasterId, request.PortNumber);
+                //_logger.LogInformation("Starting process data streaming for {MasterId}, port {PortNumber}", request.MasterId, request.PortNumber);
 
                 var taskCompletionSource = new TaskCompletionSource<bool>();
 
@@ -629,7 +629,7 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                 finally
                 {
                     device.ProcessDataReceived -= ProcessDataHandler;
-                    _logger.LogInformation("Stopped process data streaming for {MasterId}", request.MasterId);
+                    //_logger.LogInformation("Stopped process data streaming for {MasterId}", request.MasterId);
                 }
             }
             catch (Exception ex)
@@ -655,6 +655,133 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                 DisplayName = variable.DisplayName ?? string.Empty
             };
             return result;
+        }
+
+        public override Task<StartProcessDataAnnouncementResponse> StartProcessDataAnnouncement(StartProcessDataAnnouncementRequest request, ServerCallContext context)
+        {
+            try
+            {
+                if (!_devices.TryGetValue(request.MasterId, out var device))
+                {
+                    _logger.LogError("Device {MasterId} not found for starting process data announcement", request.MasterId);
+                    return Task.FromResult(new StartProcessDataAnnouncementResponse
+                    {
+                        ErrorCode = -1,
+                        ErrorMessage = "Device not found",
+                        IsStarted = false
+                    });
+                }
+
+                // Get the HAL layer from the device
+                var deviceHAL = GetDeviceHAL(device);
+                if (deviceHAL == null)
+                {
+                    _logger.LogError("Could not access HAL layer for device {MasterId}", request.MasterId);
+                    return Task.FromResult(new StartProcessDataAnnouncementResponse
+                    {
+                        ErrorCode = -2,
+                        ErrorMessage = "Could not access device HAL layer",
+                        IsStarted = false
+                    });
+                }
+
+                deviceHAL.StartProcessDataAnnouncer();
+                _logger.LogInformation("Started process data announcement for {MasterId}", request.MasterId);
+
+                return Task.FromResult(new StartProcessDataAnnouncementResponse
+                {
+                    ErrorCode = 0,
+                    ErrorMessage = "Process data announcement started successfully",
+                    IsStarted = true
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error starting process data announcement for {MasterId}", request.MasterId);
+                return Task.FromResult(new StartProcessDataAnnouncementResponse
+                {
+                    ErrorCode = -3,
+                    ErrorMessage = $"Exception: {ex.Message}",
+                    IsStarted = false
+                });
+            }
+        }
+
+        public override Task<StopProcessDataAnnouncementResponse> StopProcessDataAnnouncement(StopProcessDataAnnouncementRequest request, ServerCallContext context)
+        {
+            try
+            {
+                if (!_devices.TryGetValue(request.MasterId, out var device))
+                {
+                    _logger.LogError("Device {MasterId} not found for stopping process data announcement", request.MasterId);
+                    return Task.FromResult(new StopProcessDataAnnouncementResponse
+                    {
+                        ErrorCode = -1,
+                        ErrorMessage = "Device not found",
+                        IsStopped = false
+                    });
+                }
+
+                // Get the HAL layer from the device
+                var deviceHAL = GetDeviceHAL(device);
+                if (deviceHAL == null)
+                {
+                    _logger.LogError("Could not access HAL layer for device {MasterId}", request.MasterId);
+                    return Task.FromResult(new StopProcessDataAnnouncementResponse
+                    {
+                        ErrorCode = -2,
+                        ErrorMessage = "Could not access device HAL layer",
+                        IsStopped = false
+                    });
+                }
+
+                deviceHAL.StopProcessDataAnnouncer();
+                _logger.LogInformation("Stopped process data announcement for {MasterId}", request.MasterId);
+
+                return Task.FromResult(new StopProcessDataAnnouncementResponse
+                {
+                    ErrorCode = 0,
+                    ErrorMessage = "Process data announcement stopped successfully",
+                    IsStopped = true
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error stopping process data announcement for {MasterId}", request.MasterId);
+                return Task.FromResult(new StopProcessDataAnnouncementResponse
+                {
+                    ErrorCode = -3,
+                    ErrorMessage = $"Exception: {ex.Message}",
+                    IsStopped = false
+                });
+            }
+        }
+
+        private IMasterHAL? GetDeviceHAL(Device device)
+        {
+            try
+            {
+                // Access the private DeviceHAL field using reflection
+                var deviceType = device.GetType();
+                var halField = deviceType.GetField("DeviceHAL", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (halField != null)
+                {
+                    return halField.GetValue(device) as IMasterHAL;
+                }
+
+                var halProperty = deviceType.GetProperty("DeviceHAL", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (halProperty != null)
+                {
+                    return halProperty.GetValue(device) as IMasterHAL;
+                }
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get DeviceHAL via reflection");
+                return null;
+            }
         }
     }
 }

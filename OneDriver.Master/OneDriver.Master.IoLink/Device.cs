@@ -12,7 +12,9 @@ using OneDriver.Module.Channel;
 using Serilog;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Net.NetworkInformation;
 using static DeviceDescriptor.Abstract.Definition;
+using static OneDriver.Master.IoLink.Products.Definition;
 
 namespace OneDriver.Master.IoLink
 {
@@ -154,6 +156,8 @@ namespace OneDriver.Master.IoLink
         
         protected override int ReadParam(BasicVariable param)
         {
+            Log.Information($"Read {param.Name}");
+
             TrySetVariableValue(param, null);
             var err = DeviceHAL.ReadRecord(Convert.ToUInt16(param.Index),
                 Convert.ToByte(((Variable)param).Subindex), out var data, out _, out _, out _);
@@ -196,6 +200,7 @@ namespace OneDriver.Master.IoLink
                 Log.Error(param.Name + " Data null");
                 return (int)Abstract.Contracts.Definition.Error.ParameterNotFound;
             }
+            Log.Information($"Write {param.Name}");
             string[] dataToWrite = [.. param.Value.Split(';')];
             DataConverter.DataError dataError;
             if ((dataError = DataConverter.ToByteArray(dataToWrite, param.DataType, param.LengthInBits,
