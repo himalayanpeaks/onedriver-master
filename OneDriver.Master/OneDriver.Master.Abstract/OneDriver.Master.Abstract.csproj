@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <PackageReference Include="DeviceDescriptor.Abstract" Version="3.2.1" />
+    <PackageReference Include="OneDriver.Helper" Version="1.0.1" />
     <PackageReference Include="OneDriver.Module" Version="1.0.0" />
   </ItemGroup>
 

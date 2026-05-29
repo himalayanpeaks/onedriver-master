@@ -10,6 +10,7 @@ using OneDriver.Master.IoLink;
 using OneDriver.Master.IoLink.Channels;
 using OneDriver.Master.IoLink.Products;
 using System.Collections.Concurrent;
+using System.Text;
 
 namespace OneDriver.Master.IoLink.gRPC.Services
 {
@@ -261,6 +262,19 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                 {
                     if (variable != null)
                     {
+                        // Some CHAR values are only exposed via raw index/subindex reads.
+                        // Fall back to ReadParam when the named read returns an empty string.
+                        if (string.IsNullOrEmpty(value)
+                            && string.Equals(variable.DataType.ToString(), "CHAR", StringComparison.OrdinalIgnoreCase)
+                            && variable.Index > 0)
+                        {
+                            var rawError = device.ReadParam(variable.Index, variable.Subindex, out byte[]? rawData);
+                            if (rawError == 0 && rawData != null && rawData.Length > 0)
+                            {
+                                value = Encoding.ASCII.GetString(rawData).TrimEnd('\0', ' ');
+                            }
+                        }
+
                         response.Variable = MapVariableToProto(variable);
                         response.Variable.Value = value ?? string.Empty;
                     }
@@ -465,17 +479,55 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                 {
                     ParameterCount = descriptor.Variables.ParamsCollection.Count,
                     CommandCount = descriptor.Variables.CommandsCollection.Count,
-                    ProcessDataCount = descriptor.Variables.PdInCollection.Count
+                    ProcessDataCount = descriptor.Variables.PdInCollection.Count + descriptor.Variables.PdOutCollection.Count
                 };
+
+                var seenEntries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                void AddToParameters(IEnumerable<Variable>? source, string tabKind)
+                {
+                    if (source == null)
+                    {
+                        return;
+                    }
+
+                    foreach (var variable in source)
+                    {
+                        var key = $"{tabKind}:{variable.Name}";
+                        if (!seenEntries.Add(key))
+                        {
+                            continue;
+                        }
+
+                        response.Parameters.Add(MapVariableToProto(variable, tabKind));
+                    }
+                }
+
+                // Params are split by their standard/specific/system collections.
+                AddToParameters(descriptor.Variables.StandardVariables, "Standard Params");
+                AddToParameters(descriptor.Variables.SpecificVariables, "Specific");
+                AddToParameters(descriptor.Variables.SystemVariables, "System");
+
+                // Expose non-parameter collections as dedicated tab kinds.
+                AddToParameters(descriptor.Variables.CommandsCollection, "Commands");
+                AddToParameters(descriptor.Variables.EventsCollection, "Events");
+                AddToParameters(descriptor.Variables.PdInCollection, "PdIn");
+                AddToParameters(descriptor.Variables.PdOutCollection, "PdOut");
 
                 foreach (var param in descriptor.Variables.ParamsCollection)
                 {
+                    var key = $"params:{param.Name}";
+                    if (!seenEntries.Add(key))
+                    {
+                        continue;
+                    }
+
                     response.Parameters.Add(MapVariableToProto(param));
                 }
 
                 foreach (var cmd in descriptor.Variables.CommandsCollection)
                 {
-                    response.Commands.Add(MapVariableToProto(cmd));
+                    response.Commands.Add(MapVariableToProto(cmd, "Commands"));
                 }
 
                 return Task.FromResult(response);
@@ -586,7 +638,7 @@ namespace OneDriver.Master.IoLink.gRPC.Services
             }
         }
 
-        private VariableData MapVariableToProto(DeviceDescriptor.IoLink.Variables.Variable variable)
+        private VariableData MapVariableToProto(DeviceDescriptor.IoLink.Variables.Variable variable, string? variableKindOverride = null)
         {
             var result = new VariableData
             {
@@ -599,7 +651,7 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                 Offset = variable.Offset,
                 IsDynamic = variable.IsDynamic,
                 ArrayCount = variable.ArrayCount,
-                VariableKind = variable.Kind.ToString(),
+                VariableKind = string.IsNullOrWhiteSpace(variableKindOverride) ? variable.Kind.ToString() : variableKindOverride,
                 DisplayName = variable.DisplayName ?? string.Empty
             };
             return result;

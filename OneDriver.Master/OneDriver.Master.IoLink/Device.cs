@@ -57,13 +57,13 @@ namespace OneDriver.Master.IoLink
 
         private void ProcessDataChanged(object sender, InternalDataHAL e)
         {
-            if (e.Data == null || e.Data.Length == 0)
+            if (e.ProcessData == null || e.ProcessData.Length == 0)
                 return;
 
             var local = _descriptor.Variables.PdInCollection.ToList();
             foreach (var parameter in local)
             {
-                var processValue = DataConverter.MaskByteArray(e.Data, parameter.Offset, parameter.LengthInBits,
+                var processValue = DataConverter.MaskByteArray(e.ProcessData, parameter.Offset, parameter.LengthInBits,
                     parameter.DataType, false);
                 TrySetVariableValue(parameter, processValue);
 
@@ -114,6 +114,7 @@ namespace OneDriver.Master.IoLink
             Log.Information(err.ToString());
             if (err == Products.Definition.t_eInternal_Return_Codes.RETURN_OK)
             {
+                //UpdateDataFromSensor();
                 DeviceHAL.StartProcessDataAnnouncer();
                 return 0;
             }
@@ -137,6 +138,7 @@ namespace OneDriver.Master.IoLink
 
         public int ReadParam(int index, int subindex, out byte[]? data)
         {
+            
             var err = DeviceHAL.ReadRecord((ushort)index, (byte)subindex, out data, out _, out _, out _);
             if (data == null)
                 throw new Exception("index: " + index + " read value is null");
@@ -149,6 +151,7 @@ namespace OneDriver.Master.IoLink
             var err = DeviceHAL.WriteRecord((ushort)index, (byte)subindex, data, out _, out _);
             return (int)err;
         }
+        
         protected override int ReadParam(BasicVariable param)
         {
             TrySetVariableValue(param, null);
