@@ -1,5 +1,6 @@
 using DeviceDescriptor.Factory;
 using OneDriver.Master.IoLink.gRPC.Services;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,6 +9,7 @@ var ioddFinderConfig = builder.Configuration.GetSection("IODDFinder");
 var baseUrl = ioddFinderConfig["BaseUrl"];
 var apiKey = ioddFinderConfig["ApiKey"];
 
+Serilog.Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateLogger();
 if (!string.IsNullOrEmpty(baseUrl) && !string.IsNullOrEmpty(apiKey))
 {
     DeviceDescriptorFactory.ConfigureIoddFinder(baseUrl, apiKey);

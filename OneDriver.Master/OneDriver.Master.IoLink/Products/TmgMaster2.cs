@@ -1,5 +1,6 @@
 ﻿using OneDriver.Framework.Libs.Announcer;
 using OneDriver.Framework.Libs.Validator;
+using OneDriver.Toolbox;
 using Serilog;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -11,7 +12,11 @@ namespace OneDriver.Master.IoLink.Products
     {
         private ushort ProcessDataIndex { get; set; }
         private byte ProcessDataSubIndex { get; set; }
-        public int ProcessDataReadDelayMs { get; set; } = 200;
+        public uint ProcessDataReadDelayMs { get; set; } = 200;
+
+        // Thread-safe announcer control
+        private readonly object _announcerLock = new object();
+        private bool _isAnnouncerRunning = false;
 
         protected override void FetchDataForTunnel(ref InternalDataHAL data)
         {
@@ -42,6 +47,9 @@ namespace OneDriver.Master.IoLink.Products
 
         public OneDriver.Module.Definition.ConnectionError Close()
         {
+            // Stop announcer before closing connection
+            StopProcessDataAnnouncer();
+
             var status = 0;
             if (_handle > 0)
             {
@@ -53,12 +61,50 @@ namespace OneDriver.Master.IoLink.Products
             return OneDriver.Module.Definition.ConnectionError.ErrorInDisconnecting;
         }
 
-        public void StartProcessDataAnnouncer() => StartAnnouncingData();
+        public void StartProcessDataAnnouncer() 
+        { 
+            lock (_announcerLock)
+            {
+                if (_isAnnouncerRunning)                
+                    return;
+                
+                try
+                {
+                    StartAnnouncingData();
+                    _isAnnouncerRunning = true;
+                    Log.Information("Process data announcer started successfully.");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"Failed to start process data announcer: {ex.Message}");
+                    _isAnnouncerRunning = false;
+                    throw;
+                }
+            }
+        }
 
         public void StopProcessDataAnnouncer()
         {
-            StopAnnouncingData();
-            OneDriver.Toolbox.Tools.Wait((uint)ProcessDataReadDelayMs); //Wait for announcer to stop
+            lock (_announcerLock)
+            {
+                if (!_isAnnouncerRunning)
+                    return;
+                try
+                {
+                    StopAnnouncingData();
+                    _isAnnouncerRunning = false;
+                    Log.Information("Process data announcer stopped successfully.");
+
+                    // Wait for announcer to stop gracefully
+                    OneDriver.Toolbox.Tools.Wait(ProcessDataReadDelayMs);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"Error while stopping process data announcer: {ex.Message}");
+                    // Still mark as stopped to allow restart
+                    _isAnnouncerRunning = false;
+                }
+            }
         }
 
         public void AttachToProcessDataEvent(DataEventHandler processDataEventHandler)
@@ -87,8 +133,7 @@ namespace OneDriver.Master.IoLink.Products
 
             StopProcessDataAnnouncer();            
             var status = IOL_ReadReq(_handle, (uint)SensorPortNumber, ref param);
-            StartProcessDataAnnouncer();
-
+            //StartProcessDataAnnouncer();
             var readArray = new byte[param.Length];
             readBuffer = new byte[param.Length];
             if (param.Length != 0)
@@ -97,6 +142,8 @@ namespace OneDriver.Master.IoLink.Products
             readBufferLength = param.Length;
             errorCode = param.ErrorCode;
             additionalCode = param.AdditionalCode;
+            Log.Information($"Read record index {index}, subindex {subIndex}: status {(t_eInternal_Return_Codes)status}, " +
+                $"error code {errorCode}, additional code {additionalCode}, data length {readBufferLength}");
             readBuffer = Array.ConvertAll<byte, byte>(readArray, input => input);
             return (t_eInternal_Return_Codes)status;
         }
@@ -117,12 +164,14 @@ namespace OneDriver.Master.IoLink.Products
                     param.Result[i] = writeBuffer[i];
                 StopProcessDataAnnouncer();
                 status = IOL_WriteReq(_handle, (uint)SensorPortNumber, ref param);
-                StartProcessDataAnnouncer();
+                //StartProcessDataAnnouncer();
             }
 
             /***Assign values...****/
             errorCode = param.ErrorCode;
             additionalCode = param.AdditionalCode;
+            Log.Information($"Write record index {index}, subindex {subIndex}: status {(t_eInternal_Return_Codes)status}, " +
+                $"error code {errorCode}, additional code {additionalCode}, data length {writeBuffer.Length}");
             return (t_eInternal_Return_Codes)status;
         }
 
@@ -293,7 +342,7 @@ namespace OneDriver.Master.IoLink.Products
             {
                 if (ProcessDataReadDelayMs > 0)
                 {
-                    Thread.Sleep(ProcessDataReadDelayMs);
+                    Tools.Wait(ProcessDataReadDelayMs);
                 }
                 var result = IOL_ReadInputs(_handle, (uint)SensorPortNumber, processDataPtr, ref length, ref status);
                 if (result == 0 && length > 0)
