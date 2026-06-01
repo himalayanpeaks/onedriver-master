@@ -642,18 +642,89 @@ namespace OneDriver.Master.IoLink.gRPC.Services
         {
             var result = new VariableData
             {
+                // Core identification
                 Name = variable.Name ?? string.Empty,
                 Index = variable.Index,
                 Subindex = variable.Subindex,
+
+                // Data value and type information
                 Value = variable.Value ?? string.Empty,
                 DataType = variable.DataType.ToString(),
                 LengthInBits = variable.LengthInBits,
                 Offset = variable.Offset,
-                IsDynamic = variable.IsDynamic,
                 ArrayCount = variable.ArrayCount,
+
+                // Variable classification
                 VariableKind = string.IsNullOrWhiteSpace(variableKindOverride) ? variable.Kind.ToString() : variableKindOverride,
-                DisplayName = variable.DisplayName ?? string.Empty
+                IsDynamic = variable.IsDynamic,
+
+                // Display and identification
+                DisplayName = variable.DisplayName ?? string.Empty,
+                TextId = variable.TextId ?? string.Empty,
+                OwnerId = variable.OwnerId ?? string.Empty,
+
+                // Value constraints and validation
+                DefaultValue = variable.Default ?? string.Empty,
+                Minimum = variable.Minimum ?? string.Empty,
+                Maximum = variable.Maximum ?? string.Empty,
+                Valid = variable.Valid ?? string.Empty,
+
+                // Access control
+                Access = variable.Access.ToString()
             };
+
+            // Map ValidDisplayTexts dictionary
+            if (variable.ValidDisplayTexts != null)
+            {
+                foreach (var kvp in variable.ValidDisplayTexts)
+                {
+                    result.ValidDisplayTexts.Add(kvp.Key, kvp.Value);
+                }
+            }
+
+            // Check if this is actually a MenuVariable and map additional properties
+            var menuVariableType = variable.GetType();
+            if (menuVariableType.Name == "MenuVariable")
+            {
+                try
+                {
+                    // Use reflection to get MenuVariable-specific properties
+                    var accessRightRestriction = menuVariableType.GetProperty("AccessRightRestriction")?.GetValue(variable);
+                    result.AccessRightRestriction = accessRightRestriction?.ToString() ?? string.Empty;
+
+                    var menuId = menuVariableType.GetProperty("MenuId")?.GetValue(variable) as string;
+                    result.MenuId = menuId ?? string.Empty;
+
+                    var menuPath = menuVariableType.GetProperty("MenuPath")?.GetValue(variable) as string;
+                    result.MenuPath = menuPath ?? string.Empty;
+
+                    var role = menuVariableType.GetProperty("Role")?.GetValue(variable) as string;
+                    result.Role = role ?? string.Empty;
+
+                    var displayFormat = menuVariableType.GetProperty("DisplayFormat")?.GetValue(variable) as string;
+                    result.DisplayFormat = displayFormat ?? string.Empty;
+
+                    var unitCode = menuVariableType.GetProperty("UnitCode")?.GetValue(variable) as string;
+                    result.UnitCode = unitCode ?? string.Empty;
+
+                    var gradient = menuVariableType.GetProperty("Gradient")?.GetValue(variable) as string;
+                    result.Gradient = gradient ?? string.Empty;
+
+                    var scalingOffset = menuVariableType.GetProperty("ScalingOffset")?.GetValue(variable) as string;
+                    result.ScalingOffset = scalingOffset ?? string.Empty;
+
+                    var buttonValue = menuVariableType.GetProperty("ButtonValue")?.GetValue(variable) as string;
+                    result.ButtonValue = buttonValue ?? string.Empty;
+
+                    var isSubindexSupported = menuVariableType.GetProperty("IsSubindexSupported")?.GetValue(variable);
+                    result.IsSubindexSupported = isSubindexSupported is bool b && b;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to map MenuVariable properties for {VariableName}", variable.Name);
+                }
+            }
+
             return result;
         }
 
