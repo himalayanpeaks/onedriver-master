@@ -255,17 +255,56 @@ message GetChannelInfoResponse {
 
 // Common data structures
 message VariableData {
+  // Core identification
   string name = 1;
   int32 index = 2;
   int32 subindex = 3;
+
+  // Data value and type information
   string value = 4;
   string data_type = 5;  // UINT, INT, CHAR, BOOL, etc.
   int32 length_in_bits = 6;
   int32 offset = 7;
-  bool is_dynamic = 8;
   int32 array_count = 9;
+
+  // Variable classification  
   string variable_kind = 10;  // Parameter, Command, ProcessData, etc.
+  bool is_dynamic = 8;
+
+  // Display and identification
   string display_name = 11;
+  string text_id = 12;
+  string owner_id = 13;
+
+  // Value constraints and validation
+  string default_value = 14;
+  string minimum = 15;
+  string maximum = 16;
+  string valid = 17;
+
+  // Access control
+  string access = 18;  // ro, wo, rw
+  string access_right_restriction = 19;
+
+  // MenuVariable-specific properties
+  string menu_id = 20;
+  string menu_path = 21;
+  string role = 22;
+
+  // Display and formatting
+  string display_format = 23;
+  string unit_code = 24;
+
+  // Scaling and conversion
+  string gradient = 25;
+  string scaling_offset = 26;
+
+  // Button and UI
+  string button_value = 27;
+  bool is_subindex_supported = 28;
+
+  // Value display mappings
+  map<string, string> valid_display_texts = 29;
 }
 
 message DeviceInfo {
