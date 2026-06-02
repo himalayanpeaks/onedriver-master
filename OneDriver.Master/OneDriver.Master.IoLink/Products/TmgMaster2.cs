@@ -307,8 +307,36 @@ namespace OneDriver.Master.IoLink.Products
             localGenerated = 0;
             sensorStatus = 0;
 
+            try
+            {
+                var eventData = new TEvent();
 
-            return t_eInternal_Return_Codes.RETURN_OK;
+                var result = IOL_ReadEvent(_handle, ref eventData, ref sensorStatus);
+
+                if (result == (int)t_eInternal_Return_Codes.RETURN_OK)
+                {
+                    aNumber = eventData.Number;
+                    aEventCode = eventData.EventCode;
+                    aInstance = eventData.Instance;
+                    mode = eventData.Mode;
+                    aType = eventData.Type;
+                    pdValid = eventData.PDValid;
+                    localGenerated = eventData.LocalGenerated;
+
+                    Log.Debug($"Event read: Number={aNumber}, Code={aEventCode}, Instance={aInstance}, Mode={mode}, Type={aType}");
+                }
+                else
+                {
+                    Log.Debug($"No event available or error reading event: {result}");
+                }
+
+                return (t_eInternal_Return_Codes)result;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"ReadEvent failed: {ex.Message}");
+                return t_eInternal_Return_Codes.No_details;
+            }
         }
 
         public t_eInternal_Return_Codes GetVariableInfo(string indexName, string subIndexName, out ushort index, out byte subIndex,

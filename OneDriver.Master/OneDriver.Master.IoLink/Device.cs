@@ -107,6 +107,10 @@ namespace OneDriver.Master.IoLink
             }
         }
 
+        public int ReadEvent(ushort number, ushort eventCode, out byte type, out byte pdValid)
+        {
+            return (int)DeviceHAL.ReadEvent(out number, out eventCode, out _, out _, out type, out pdValid, out _, out _);            
+        }
         protected override int CloseConnection() => (int)DeviceHAL.Close();
         protected override int OpenConnection(string initString) => (int)DeviceHAL.Open(initString, Validator);
 
