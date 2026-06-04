@@ -23,6 +23,8 @@ namespace OneDriver.Master.IoLink
         private IMasterHAL DeviceHAL { get; set; }
 
         public event EventHandler<ProcessDataEventArgs>? ProcessDataReceived;
+        public event EventHandler<IoLinkEventArgs>? IoLinkEventReceived;
+        
 
         public Device(string name, IValidator validator, IMasterHAL deviceHAL, Descriptor descriptor) :
             base(new DeviceParams(name), validator,
@@ -68,10 +70,11 @@ namespace OneDriver.Master.IoLink
                 var processValue = DataConverter.MaskByteArray(e.ProcessData, parameter.Offset, parameter.LengthInBits,
                     parameter.DataType, false);
                 TrySetVariableValue(parameter, processValue);
-
-                // Raise event for each parameter with channel and timestamp info
                 ProcessDataReceived?.Invoke(this, new ProcessDataEventArgs(parameter, e.ChannelNumber, e.TimeStamp));
             }
+
+            //Control event code in application and only raise event if event code is not 0 
+            IoLinkEventReceived?.Invoke(this, new IoLinkEventArgs(e.Number, e.EventCode, e.Instance, e.Mode, e.Type, e.PdValid, e.LocalGenerated, e.SensorStatus, e.ChannelNumber, e.TimeStamp));
         }
 
         private void Parameters_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -109,9 +112,35 @@ namespace OneDriver.Master.IoLink
 
         public int ReadEvent(ushort number, ushort eventCode, out byte type, out byte pdValid)
         {
-            return (int)DeviceHAL.ReadEvent(out number, out eventCode, out _, out _, out type, out pdValid, out _, out _);            
+            var result = (int)DeviceHAL.ReadEvent(out number, out eventCode, out var instance, out var mode, out type, 
+                out pdValid, out var localGenerated, out var sensorStatus);
+
+            // Raise event if successful
+            if (result == (int)Products.Definition.t_eInternal_Return_Codes.RETURN_OK && IoLinkEventReceived != null)
+            {
+                var eventArgs = new IoLinkEventArgs(
+                    eventNumber: number,
+                    eventCode: eventCode,
+                    instance: instance,
+                    mode: mode,
+                    type: type,
+                    pdValid: pdValid,
+                    localGenerated: localGenerated,
+                    sensorStatus: sensorStatus,
+                    channelNumber: DeviceHAL.SensorPortNumber,
+                    timeStamp: DateTime.UtcNow
+                );
+
+                IoLinkEventReceived?.Invoke(this, eventArgs);
+            }
+
+            return result;
         }
-        protected override int CloseConnection() => (int)DeviceHAL.Close();
+        protected override int CloseConnection()
+        {
+            DeviceHAL.StopProcessDataAnnouncer();
+            return (int)DeviceHAL.Close();
+        }
         protected override int OpenConnection(string initString) => (int)DeviceHAL.Open(initString, Validator);
 
         public override int ConnectSensor()
@@ -215,7 +244,5 @@ namespace OneDriver.Master.IoLink
         }
 
         protected override int WriteCommand(BasicVariable command) => WriteParam(command);
-
-
     }
 }

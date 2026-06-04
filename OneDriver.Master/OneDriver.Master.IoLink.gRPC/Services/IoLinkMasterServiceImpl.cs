@@ -854,5 +854,55 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                 return null;
             }
         }
+
+        private string GetEventName(ushort eventCode)
+        {
+            // Map IO-Link event codes to human-readable names
+            // Based on IO-Link specification Table A.4
+            return eventCode switch
+            {
+                0x1000 => "Device Appeared",
+                0x1010 => "Device Disappeared",
+                0x1020 => "Device Connected",
+                0x1030 => "Device Disconnected",
+                0x2000 => "Parameter Changed",
+                0x3000 => "Process Data Invalid",
+                0x4000 => "Communication Error",
+                0x5000 => "Process Data Quality Alarm",
+                0x6000 => "Device Status Changed",
+                _ => $"Event_{eventCode:X4}"
+            };
+        }
+
+        private string GetEventDescription(ushort eventCode, byte type)
+        {
+            // Provide detailed descriptions based on event code
+            return eventCode switch
+            {
+                0x1000 => "A new IO-Link device has been detected on the port",
+                0x1010 => "The IO-Link device is no longer available",
+                0x1020 => "Connection to IO-Link device established successfully",
+                0x1030 => "Connection to IO-Link device has been lost",
+                0x2000 => "One or more device parameters have changed",
+                0x3000 => "Process data from device is marked as invalid",
+                0x4000 => "Communication error detected with IO-Link device",
+                0x5000 => "Process data quality has degraded",
+                0x6000 => "Device operating status has changed",
+                _ => $"IO-Link event code {eventCode:X4}, type {type}"
+            };
+        }
+
+        private string GetEventSeverity(byte type)
+        {
+            // Map event type to severity level
+            // IO-Link event types: 0=Notification, 1=Warning, 2=Error
+            return type switch
+            {
+                0 => "Info",
+                1 => "Warning",
+                2 => "Error",
+                _ => "Unknown"
+            };
+        }
     }
 }

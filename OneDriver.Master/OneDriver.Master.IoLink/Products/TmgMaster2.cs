@@ -22,7 +22,8 @@ namespace OneDriver.Master.IoLink.Products
         {
             byte[] readBuffer = new byte[0];
             var err = ProcessDataReadInputs(ref readBuffer, out var length, out var status);
-            data = new InternalDataHAL(SensorPortNumber, readBuffer);
+            var eventErr = ReadEvent(out var number, out var eventCode, out var instance, out var mode, out var type, out var pdValid, out var localGenerated, out var sensorStatus);
+            data = new InternalDataHAL(SensorPortNumber, readBuffer, number, eventCode, instance, mode, type, pdValid, localGenerated, sensorStatus);
             if (err != t_eInternal_Return_Codes.RETURN_OK || length == 0)
                 Log.Error("Process data index " + ProcessDataIndex + " couldn't be read: " + err);
         }

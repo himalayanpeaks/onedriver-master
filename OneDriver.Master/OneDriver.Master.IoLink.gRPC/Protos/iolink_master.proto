@@ -29,10 +29,13 @@ service IoLinkMasterService {
   // Real-time process data streaming
   rpc StreamProcessData(StreamProcessDataRequest) returns (stream ProcessDataUpdate);
 
+  // Real-time event streaming
+  rpc StreamEvents(StreamEventsRequest) returns (stream EventUpdate);
+
   // Process data announcement control
   rpc StartProcessDataAnnouncement(StartProcessDataAnnouncementRequest) returns (StartProcessDataAnnouncementResponse);
   rpc StopProcessDataAnnouncement(StopProcessDataAnnouncementRequest) returns (StopProcessDataAnnouncementResponse);
-  
+
   // Descriptor and metadata
   rpc GetDescriptor(GetDescriptorRequest) returns (GetDescriptorResponse);
   rpc GetChannelInfo(GetChannelInfoRequest) returns (GetChannelInfoResponse);
@@ -227,6 +230,28 @@ message ProcessDataUpdate {
   bool is_parameter = 14;
   bool is_process_data = 15;
 }
+
+// Event streaming messages
+message StreamEventsRequest {
+  string master_id = 1;
+  int32 port_number = 2;  // Optional, uses selected port if not specified
+}
+
+message EventUpdate {
+  int32 channel_number = 1;
+  int64 timestamp = 2;
+  uint32 event_number = 3;
+  uint32 event_code = 4;
+  uint32 instance = 5;
+  uint32 mode = 6;
+  uint32 type = 7;
+  bool pd_valid = 8;
+  bool local_generated = 9;
+  string event_name = 10;        // Human-readable event name (if available)
+  string event_description = 11; // Event description (if available)
+  string severity = 12;           // e.g., "Info", "Warning", "Error"
+}
+
 
 // Descriptor and metadata messages
 message GetDescriptorRequest {
