@@ -229,7 +229,21 @@ message ProcessDataUpdate {
   int32 process_data_index = 13;
   bool is_parameter = 14;
   bool is_process_data = 15;
+
+  // Event data fields (when is_process_data = false, these contain event information)
+  uint32 event_number = 16;
+  uint32 event_code = 17;
+  uint32 event_instance = 18;
+  uint32 event_mode = 19;
+  uint32 event_type = 20;
+  bool event_pd_valid = 21;
+  bool event_local_generated = 22;
+  uint32 event_sensor_status = 23;
+  string event_name = 24;
+  string event_description = 25;
+  string event_severity = 26;
 }
+
 
 // Event streaming messages
 message StreamEventsRequest {

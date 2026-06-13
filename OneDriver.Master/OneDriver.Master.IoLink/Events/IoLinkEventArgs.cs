@@ -26,6 +26,7 @@ namespace OneDriver.Master.IoLink.Events
             Type = type;
             PdValid = pdValid;
             LocalGenerated = localGenerated;
+            SensorStatus = sensorStatus;
             ChannelNumber = channelNumber;
             TimeStamp = timeStamp;
         }
@@ -74,5 +75,10 @@ namespace OneDriver.Master.IoLink.Events
         /// Timestamp when event was received
         /// </summary>
         public DateTime TimeStamp { get; }
+
+        /// <summary>
+        /// Sensor status information
+        /// </summary>
+        public uint SensorStatus { get; }
     }
 }

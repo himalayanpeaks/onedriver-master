@@ -570,7 +570,6 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                 return Task.FromResult(new GetChannelInfoResponse());
             }
         }
-
         public override async Task StreamProcessData(StreamProcessDataRequest request, IServerStreamWriter<ProcessDataUpdate> responseStream, ServerCallContext context)
         {
             try
@@ -605,7 +604,9 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                         DataType = e.Parameter.DataType.ToString(),
                         Minimum = e.Parameter.Minimum ?? string.Empty,
                         Maximum = e.Parameter.Maximum ?? string.Empty,
-                        LengthInBits = e.Parameter.LengthInBits
+                        LengthInBits = e.Parameter.LengthInBits,
+                        IsParameter = true,
+                        IsProcessData = true
                     };
 
                     try
@@ -619,7 +620,45 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                     }
                 }
 
+                void EventHandler(object? sender, IoLink.Events.IoLinkEventArgs e)
+                {
+                    // Send events to stream independently from process data
+                    var eventUpdate = new ProcessDataUpdate
+                    {
+                        ChannelNumber = e.ChannelNumber,
+                        Timestamp = new DateTimeOffset(e.TimeStamp).ToUnixTimeMilliseconds(),
+
+                        // Event-specific fields
+                        EventNumber = e.EventNumber,
+                        EventCode = e.EventCode,
+                        EventInstance = (uint)e.Instance,
+                        EventMode = (uint)e.Mode,
+                        EventType = (uint)e.Type,
+                        EventPdValid = e.PdValid != 0,
+                        EventLocalGenerated = e.LocalGenerated != 0,
+                        EventSensorStatus = e.SensorStatus,
+                        EventName = GetEventName(e.EventCode),
+                        EventDescription = GetEventDescription(e.EventCode, e.Type),
+                        EventSeverity = GetEventSeverity(e.Type),
+
+                        // Mark as event-only (no process data)
+                        IsParameter = false,
+                        IsProcessData = false
+                    };
+
+                    try
+                    {
+                        responseStream.WriteAsync(eventUpdate).Wait();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error writing event to stream");
+                        taskCompletionSource.TrySetResult(false);
+                    }
+                }
+
                 device.ProcessDataReceived += ProcessDataHandler;
+                device.IoLinkEventReceived += EventHandler;
 
                 try
                 {
@@ -629,6 +668,7 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                 finally
                 {
                     device.ProcessDataReceived -= ProcessDataHandler;
+                    device.IoLinkEventReceived -= EventHandler;
                     //_logger.LogInformation("Stopped process data streaming for {MasterId}", request.MasterId);
                 }
             }
@@ -637,7 +677,7 @@ namespace OneDriver.Master.IoLink.gRPC.Services
                 _logger.LogError(ex, "Error in StreamProcessData for {MasterId}", request.MasterId);
             }
         }
-
+        
         private VariableData MapVariableToProto(DeviceDescriptor.IoLink.Variables.Variable variable, string? variableKindOverride = null)
         {
             var result = new VariableData
